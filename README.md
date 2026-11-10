@@ -39,9 +39,9 @@ Prebuilt archives are published on the
 
 | Platform | Archive |
 |---|---|
-| Linux x86-64 | `DuneStrike_v1.3.0.3_Linux.tar.gz` |
-| Windows 32-bit | `DuneStrike_v1.3.0.3_Windows.zip` |
-| macOS arm64 | `DuneStrike_v1.3.0.3_macOS.zip` |
+| Linux x86-64 | `DuneStrike_v1.4.0.0_Linux.tar.gz` |
+| Windows 32-bit | `DuneStrike_v1.4.0.0_Windows.zip` |
+| macOS arm64 | `DuneStrike_v1.4.0.0_macOS.zip` |
 
 The macOS archive includes its own libraries and runs without Homebrew.
 The Windows archive includes the required DLLs. On Linux, install the usual

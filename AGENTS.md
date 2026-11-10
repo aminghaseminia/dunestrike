@@ -15,22 +15,43 @@ systemctl --user restart dunestrike-server   # only if the server service is run
 
 Everything below exists to make that flow safe. Do not break it.
 
+- A pull/merge is **not live on the game server** until the **server binary** is rebuilt and `dunestrike-server` is restarted. `./build-linux.sh` builds both client and server; `make server_install` alone is enough when only the server host needs updating.
+- The server host must run the same protocol/build as the clients. After the protocol bump in this tree, old server binaries will reject new clients.
+
 ## Local Linux build
 
 - Build dependencies (sudo apt): `clang g++ libsdl2-dev libsdl2-image-dev libopenal-dev libvorbis-dev zlib1g-dev libx11-dev`.
 - Always build with `PRODUCTION` defined (`build-linux.sh` passes `-DPRODUCTION`).
-  - Production: `DS_VERSION 1303`, master port `28760`.
-  - Plain `make` (no flag): `DS_VERSION -1303`, master port `28758` — a dev/test build, wrong for releases.
+  - Production: `DS_VERSION 1400`, master port `28760`.
+  - Plain `make` (no flag): `DS_VERSION -1400`, master port `28758` — a dev/test build, wrong for releases.
 - `bin_unix/` is git-ignored (binaries never committed). The launcher uses `bin_unix/dunestrike_client` / `dunestrike_server`.
 - `build-linux.sh` is the canonical rebuild command (configures+builds bundled enet on first run, then `make client server install`). Keep it working.
 
-## App drawer entry (auto-updates by design)
+## Local macOS build (this machine)
 
-- `~/.local/share/applications/dunestrike.desktop` has `Exec=/path/to/dunestrike/dunestrike.sh`.
-- `dunestrike.sh` resolves **its own directory at launch** and execs `bin_unix/dunestrike_client` → the drawer always runs whatever was built last. **Never copy/install the binary to a separate location for the launcher** — that would freeze it at an old version.
-- If the repo moves, update `Exec` in the .desktop file (and the systemd unit below). Otherwise the entry needs no maintenance after pulls/rebuilds.
-- Icon: `~/.local/share/icons/hicolor/256x256/apps/dunestrike.png` (converted from `packages/misc/icon.png`). Regenerate only if the source icon changes.
-- Do not delete/replace the .desktop file when "cleaning up"; it is intentional state outside the repo.
+- Homebrew build dependencies: `brew install sdl2 sdl2_image libvorbis` (OpenAL is a system framework).
+- `source/src/Makefile_local` is git-ignored and supplies the macOS link overrides (no X11; OpenGL/OpenAL frameworks; SDL for the standalone server). Keep it present on this machine.
+- Production rebuild:
+  ```sh
+  cd source/src
+  make clean
+  make CXXFLAGS="-O3 -fomit-frame-pointer -Wall -fsigned-char -DPRODUCTION" client server -j"$(sysctl -n hw.ncpu)"
+  make install
+  ```
+- Output binaries are installed into `bin_unix/` exactly like the Linux build. Do not build the Mac client without `-DPRODUCTION` for normal testing.
+
+## App drawer entry — refresh after every build or rebuild (mandatory)
+
+- On macOS the client drawer entry is `~/Applications/Dune Strike.app`. Its `Contents/MacOS/DuneStrike` launcher `cd`s into this repo and execs `bin_unix/dunestrike_client`, so it always runs the latest build. On Linux the equivalent entry is `~/.local/share/applications/dunestrike.desktop` pointing at `dunestrike.sh`.
+- **After every build/rebuild, refresh the existing app-drawer entry and verify there is exactly one Dune Strike client entry.** Do not create a new versioned `.app` or `.desktop` file for each version.
+  - macOS duplicates check: `find /Applications "$HOME/Applications" -maxdepth 2 -iname 'Dune Strike.app'`
+  - Linux duplicates check: `find "$HOME/.local/share/applications" -iname 'dunestrike*.desktop'`
+  - macOS LaunchServices refresh: `/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$HOME/Applications/Dune Strike.app"`
+- If stale duplicates exist, remove them so the drawer cannot launch an old copy. `Dune Strike Server.command` is the LAN server launcher, not a second client — keep it.
+- If the repo moves, update the launcher path in the app entry (and the Linux/systemd unit). Otherwise the entry needs no maintenance after pulls/rebuilds.
+- **Never copy/install the client binary to a separate location for the launcher** — that freezes it at an old version.
+- Icons: macOS `Contents/Resources/dunestrike.icns`; Linux `~/.local/share/icons/hicolor/256x256/apps/dunestrike.png` (converted from `packages/misc/icon.png`). Regenerate only if the source icon changes.
+- Do not delete/replace the app entry when "cleaning up"; it is intentional state outside the repo.
 
 ## Dedicated server — systemd user service
 
@@ -43,6 +64,7 @@ Everything below exists to make that flow safe. Do not break it.
 
 ## CI release pipeline (`.github/workflows/build-release.yml`)
 
+- Pull requests do **not** produce server/client release binaries. The release jobs run on **push to `main`**, a `v*` tag, or `workflow_dispatch`; merge/push first, then the server and client assets are rebuilt.
 - Trigger: **push to `main`** rebuilds Linux + Windows + macOS and updates the versioned release automatically (the workflow moves the `v<version>` tag to the new commit). Pushing a tag `v*` or running `workflow_dispatch` builds an exact version. Assets are uploaded with `--clobber`, so re-runs are safe.
 - Keep the "Enable production build" sed step — without it the shipped binaries are dev builds (negative version, wrong master port).
 - **Windows job** (mingw cross, i686/32-bit — matches the shipped `bin_win32` DLLs):
@@ -66,5 +88,5 @@ Everything below exists to make that flow safe. Do not break it.
 
 Dune Strike is an altered distribution built on the Cube engine and the
 AssaultCube codebase. See `CREDITS.md` for the required origin and license
-notices. `DS_VERSION 1303` corresponds to game version 1.3.0.3. `cube.h` keeps
+notices. `DS_VERSION 1400` corresponds to game version 1.4.0.0. `cube.h` keeps
 `//#define PRODUCTION` commented; enable it per-build as described above.
