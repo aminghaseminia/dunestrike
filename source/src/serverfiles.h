@@ -2023,7 +2023,7 @@ void vita_s::addcc(const char *cc)
 {
     int rem = 0;
     for(; rem < VITACCHISTLEN - 1; rem++) if(cchist[rem * 2] == cc[0] && cchist[rem * 2 + 1] == cc[1]) break;
-    if(rem) memmove(cchist + 2, iphist, rem * 2);
+    if(rem) memmove(cchist + 2, cchist, rem * 2);
     loopi(2) cchist[i] = cc[i];
 }
 
@@ -2132,7 +2132,7 @@ void writevitas(stream *f, vector<vitakey_s> &vs)
         if(v.cchist[0])
         {
             f->printf("\n\tCC");
-            loopirev(VITACCHISTLEN) if(v.cchist[i * 2]) f->printf(" %c%c", v.cchist[i * 2], v.cchist[i * 2 + 1]);
+            loopirev(VITACCHISTLEN) if(isalpha((uchar)v.cchist[i * 2]) && isalpha((uchar)v.cchist[i * 2 + 1])) f->printf(" %c%c", v.cchist[i * 2], v.cchist[i * 2 + 1]);
         }
         f->printf("\n\tSTAT");
         loopi(VS_NUM) if(v.vs[i]) f->printf(" %s:%d", vskeywords[i], v.vs[i]);
