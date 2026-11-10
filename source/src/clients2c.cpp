@@ -740,12 +740,13 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                     gun = getint(p),
                     damage = getint(p),
                     armour = getint(p),
-                    health = getint(p);
+                    health = getint(p),
+                    zone = getint(p);
                 playerent *target = getclient(tcn), *actor = getclient(acn);
                 if(!target || !actor || !valid_weapon(gun)) break;
                 target->armour = armour;
                 target->health = health;
-                dodamage(damage, target, actor, -1, type==SV_GIBDAMAGE, false);
+                dodamage(damage, target, actor, -1, type==SV_GIBDAMAGE, false, zone);
                 actor->pstatdamage[gun]+=damage; //NEW
                 break;
             }
@@ -762,12 +763,12 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
             case SV_GIBDIED:
             case SV_DIED:
             {
-                int vcn = getint(p), acn = getint(p), frags = getint(p), gun = getint(p);
+                int vcn = getint(p), acn = getint(p), frags = getint(p), gun = getint(p), zone = getint(p);
                 playerent *victim = getclient(vcn), *actor = getclient(acn);
                 if(!actor) break;
                 if ( m_mp(gamemode) ) actor->frags = frags;
                 if(!victim) break;
-                dokill(victim, actor, type==SV_GIBDIED, gun);
+                dokill(victim, actor, type==SV_GIBDIED, gun, zone);
                 break;
             }
 

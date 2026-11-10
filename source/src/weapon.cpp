@@ -310,27 +310,73 @@ static inline bool intersectcylinder(const vec &from, const vec &to, const vec &
 
 int intersect(playerent *d, const vec &from, const vec &to, vec *end)
 {
-    float dist;
-    if(d->head.x >= 0)
+    float bestdist = 2.0f, dist;
+    int zone = HITZONE_NONE;
+
+    if(d->head.x >= 0 && intersectsphere(from, to, d->head, HEADSIZE, dist) && dist < bestdist)
     {
-        if(intersectsphere(from, to, d->head, HEADSIZE, dist))
+        bestdist = dist;
+        zone = HITZONE_HEAD;
+    }
+
+    float y = d->yaw*RAD, p = (d->pitch/4+90)*RAD, c = cosf(p);
+    vec bottom(d->o), axis(sinf(y)*c, -cosf(y)*c, sinf(p));
+    bottom.z -= d->eyeheight;
+    float h = max(d->eyeheight, 1.0f);
+
+    // arms: two narrow cylinders hanging down the sides, from the shoulders to the hands
+    bool armhit = false;
+    if(d->radius > 0.2f)
+    {
+        vec right(cosf(y), sinf(y), 0.0f);
+        right.mul(d->radius*0.72f);
+        vec armlo(axis), armhi(axis);
+        armlo.mul(h*0.42f).add(bottom);
+        armhi.mul(h*0.90f).add(bottom);
+        float armrad = d->radius*0.24f, armbest = 2.0f, armdist;
+        loopi(2)
         {
-            if(end) (*end = to).sub(from).mul(dist).add(from);
-            return 2;
+            vec lo(armlo), hi(armhi);
+            if(i) { lo.sub(right); hi.sub(right); }
+            else  { lo.add(right); hi.add(right); }
+            if(intersectcylinder(from, to, lo, hi, armrad, armdist) && armdist < armbest)
+            {
+                armbest = armdist;
+                armhit = true;
+            }
+        }
+        if(armhit && armbest < bestdist)
+        {
+            bestdist = armbest;
+            zone = HITZONE_ARMS;
         }
     }
-    float y = d->yaw*RAD, p = (d->pitch/4+90)*RAD, c = cosf(p);
-    vec bottom(d->o), top(sinf(y)*c, -cosf(y)*c, sinf(p))/*, mid(top)*/;
-    bottom.z -= d->eyeheight;
-    float h = d->eyeheight /*+ d->aboveeye*/; // this mod makes the shots pass over the shoulders
-//     mid.mul(h*0.5).add(bottom);            // this mod divides the hitbox in 2
-    top.mul(h).add(bottom);
-    if( intersectcylinder(from, to, bottom, top, d->radius, dist) ) // FIXME if using 2 hitboxes
+
+    // the rest of the body is one capsule, split along its length into legs, stomach and chest.
+    // an arm in the way of the bullet already claimed the hit above
+    if(!armhit)
     {
-        if(end) (*end = to).sub(from).mul(dist).add(from);
-        return 1;
+        static const struct { float lo, hi; int zone; } bodyparts[] =
+        {
+            { 0.00f, 0.46f, HITZONE_LEGS },
+            { 0.46f, 0.64f, HITZONE_STOMACH },
+            { 0.64f, 1.00f, HITZONE_TORSO }
+        };
+        loopi((int)(sizeof(bodyparts)/sizeof(bodyparts[0])))
+        {
+            vec start(axis), stop(axis);
+            start.mul(bodyparts[i].lo*h).add(bottom);
+            stop.mul(bodyparts[i].hi*h).add(bottom);
+            if(intersectcylinder(from, to, start, stop, d->radius, dist) && dist < bestdist)
+            {
+                bestdist = dist;
+                zone = bodyparts[i].zone;
+            }
+        }
     }
-    return 0;
+
+    if(zone != HITZONE_NONE && end) (*end = to).sub(from).mul(bestdist).add(from);
+    return zone;
 }
 
 bool intersect(entity *e, const vec &from, const vec &to, vec *end)
@@ -588,7 +634,7 @@ inline void attackevent(playerent *owner, int weapon)
 
 vector<hitmsg> hits;
 
-void hit(int damage, playerent *d, playerent *at, const vec &vel, int gun, bool gib, int info)
+void hit(int damage, playerent *d, playerent *at, const vec &vel, int gun, bool gib, int info, int zone)
 {
     if(d==player1 || d->type==ENT_BOT || !m_mp(gamemode)) d->hitpush(damage, vel, at, gun);
 
@@ -598,13 +644,13 @@ void hit(int damage, playerent *d, playerent *at, const vec &vel, int gun, bool 
         extern int lasthit;
         if(hitsound == 2 && lasthit != lastmillis)
         {
-            defformatstring(hitsnd)("sound %d %d;", S_HITSOUND, SP_HIGHEST);
+            defformatstring(hitsnd)("sound %d %d;", zone == HITZONE_HEAD ? S_HEADSHOT : S_HITSOUND, SP_HIGHEST);
             addsleep(60, hitsnd);
             lasthit = lastmillis;
         }
     }
 
-    if(!m_mp(gamemode)) dodamage(damage, d, at, gun, gib);
+    if(!m_mp(gamemode)) dodamage(damage, d, at, gun, gib, true, zone);
     else
     {
         hitmsg &h = hits.add();
@@ -629,12 +675,12 @@ void hit(int damage, playerent *d, playerent *at, const vec &vel, int gun, bool 
     }
 }
 
-void hitpush(int damage, playerent *d, playerent *at, vec &from, vec &to, int gun, bool gib, int info)
+void hitpush(int damage, playerent *d, playerent *at, vec &from, vec &to, int gun, bool gib, int info, int zone)
 {
     vec v(to);
     v.sub(from);
     v.normalize();
-    hit(damage, d, at, v, gun, gib, info);
+    hit(damage, d, at, v, gun, gib, info, zone);
 }
 
 float expdist(playerent *o, vec &dir, const vec &v)
@@ -656,7 +702,7 @@ void radialeffect(playerent *o, vec &v, int qdam, playerent *at, int gun)
     {
         if(at == player1 && o != player1 && multiplayer(NULL)) accuracym[gun].hits += 1.0f-(float)dist/EXPDAMRAD;
         int damage = (int)(qdam*(1-dist/EXPDAMRAD));
-        hit(damage, o, at, dir, gun, true, int(dist*DMF));
+        hit(damage, o, at, dir, gun, true, int(dist*DMF), HITZONE_TORSO);
     }
 }
 
@@ -778,7 +824,7 @@ void shorten(const vec &from, vec &target, float distsquared)
 void raydamage(vec &from, vec &to, playerent *d)
 {
     int dam = d->weaponsel->info.damage;
-    int hitzone = -1;
+    int hitzone = HITZONE_NONE;
     playerent *o = NULL;
     float distsquared, hitdistsquared = 0.0f;
     bool hit = false;
@@ -786,12 +832,14 @@ void raydamage(vec &from, vec &to, playerent *d)
     if(d->weaponsel->type==GUN_SHOTGUN)
     {
         playerent *hits[3*SGRAYS];
+        int hitzones[3*SGRAYS];
         loopk(3)
         loopi(SGRAYS)
         {
             rayscount++;
             int h = k*SGRAYS + i;
-            if((hits[h] = intersectclosest(from, sgr[h].rv, d, distsquared, hitzone)))
+            hitzones[h] = HITZONE_NONE;
+            if((hits[h] = intersectclosest(from, sgr[h].rv, d, distsquared, hitzones[h])))
                 shorten(from, sgr[h].rv, (hitdistsquared = distsquared));
         }
         loopk(3)
@@ -804,6 +852,7 @@ void raydamage(vec &from, vec &to, playerent *d)
                 hits[h] = NULL;
                 int numhits_o, numhits_m, numhits_c;
                 numhits_o = numhits_m = numhits_c = 0;
+                int zonecounts[NUMHITZONES] = { 0 };
                 switch(sgr[h].ds)
                 {
                     case 0: numhits_o++; break;
@@ -811,6 +860,7 @@ void raydamage(vec &from, vec &to, playerent *d)
                     case 2: numhits_c++; break;
                     default: break;
                 }
+                zonecounts[hitzones[h]]++;
                 for(int j = i+1; j < 3*SGRAYS; j++) if(hits[j] == o)
                 {
                     hits[j] = NULL;
@@ -821,27 +871,32 @@ void raydamage(vec &from, vec &to, playerent *d)
                         case 2: numhits_c++; break;
                         default: break;
                     }
+                    zonecounts[hitzones[j]]++;
                 }
                 int numhits = numhits_o + numhits_m + numhits_c;
+                // a spread of pellets hurts most where most of them landed
+                int zone = HITZONE_TORSO, zonehits = 0;
+                for(int z = HITZONE_TORSO; z < NUMHITZONES; z++) if(zonecounts[z] > zonehits)
+                {
+                    zonehits = zonecounts[z];
+                    zone = z;
+                }
                 int dmgreal = 0;
-                float dmg4r = 0.0f;
                 bool withBONUS = false;
                 if(SGDMGBONUS)
                 {
                     float d2o = SGDMGDISTB;
                     if(o) d2o = vec(from).sub(o->o).magnitude();
-                    if(d2o <= (SGDMGDISTB/10.0f) && numhits)
-                    {
-                        dmg4r += SGDMGBONUS;
-                        withBONUS = true;
-                    }
+                    if(d2o <= (SGDMGDISTB/10.0f) && numhits) withBONUS = true;
                 }
-                dmg4r += (SGCOdmg / 10.0f * SGDMGTOTAL / 100.0f) * numhits_o / 21.0f;
-                dmg4r += (SGCMdmg / 10.0f * SGDMGTOTAL / 100.0f) * numhits_m / 21.0f;
-                dmg4r += (SGCCdmg / 10.0f * SGDMGTOTAL / 100.0f) * numhits_c / 21.0f;
+                // keep this arithmetic identical to the server's so prediction cannot drift
+                float dmg4r = (SGDMGTOTAL/(21*100.0f)) * (numhits_o * SGCOdmg/10.0f + numhits_m * SGCMdmg/10.0f + numhits_c * SGCCdmg/10.0f);
+                dmg4r += (float)(withBONUS ? SGDMGBONUS : 0);
+                dmg4r *= hitzonescale(zone);
                 dmgreal = (int) ceil(dmg4r);
-                int info = (withBONUS ? SGDMGBONUS : 0) | (numhits_c << 8) | (numhits_m << 16) | (numhits_o << 24);
-                if(numhits) hitpush(dmgreal, o, d, from, to, d->weaponsel->type, numhits == SGRAYS * 3, info);
+                int bonusdist = withBONUS ? SGDMGBONUS : 0;
+                int info = hitinfopack(bonusdist, zone, numhits_c, numhits_m, numhits_o);
+                if(numhits) hitpush(dmgreal, o, d, from, to, d->weaponsel->type, numhits == SGRAYS * 3, info, zone);
 
                 if(d == player1) hit = true;
                 hitscount+=numhits;
@@ -851,15 +906,11 @@ void raydamage(vec &from, vec &to, playerent *d)
     }
     else if((o = intersectclosest(from, to, d, distsquared, hitzone)))
     {
-        bool gib = false;
-        switch(d->weaponsel->type)
-        {
-            case GUN_KNIFE: gib = true; break;
-            case GUN_SNIPER: if(d==player1 && hitzone==2) { dam *= 3; gib = true; }; break;
-            default: break;
-        }
-        bool info = gib;
-        hitpush(dam, o, d, from, to, d->weaponsel->type, gib, info ? 1 : 0);
+        int gun = d->weaponsel->type;
+        if(hitzone < HITZONE_TORSO || hitzone >= NUMHITZONES) hitzone = HITZONE_TORSO;
+        dam = (int)(dam * hitzonescale(hitzone) + 0.5f);
+        bool gib = gun == GUN_KNIFE || (gun == GUN_SNIPER && hitzone == HITZONE_HEAD);
+        hitpush(dam, o, d, from, to, gun, gib, hitzone, hitzone);
         if(d == player1) hit = true;
         shorten(from, to, distsquared);
         hitscount++;

@@ -940,13 +940,13 @@ void setkillmessage(const char *gun, bool gib, const char *message)
 COMMANDF(fragmessage, "ss", (const char *gun, const char *message) { setkillmessage(gun, false, message); });
 COMMANDF(gibmessage, "ss", (const char *gun, const char *message) { setkillmessage(gun, true, message); });
 
-const char *killmessage(int gun, bool gib = false)
+const char *killmessage(int gun, bool gib = false, int zone = HITZONE_NONE)
 {
     if(valid_weapon(gun))
     {
         defformatstring(aname)("%smessage_%s", gib ? "gib" : "frag", gunnames[gun]);
         const char *res = getalias(aname);
-        return res ? res : killmessages[gib ? 1 : 0][gun];
+        return res ? res : killmessage_for(gun, gib, zone);
     }
     return "";
 }
@@ -964,10 +964,11 @@ COMMANDF(burstshots, "si", (char *gun, int *shots)
 
 // damage arriving from the network, monsters, yourself, all ends up here.
 
-void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bool local)
+void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bool local, int zone)
 {
     if(pl->state != CS_ALIVE || intermission || ispaused) return;
     pl->lastpain = lastmillis;
+    if(zone == HITZONE_LEGS) pl->limpuntil = lastmillis + LIMPMILLIS;
     playerent *h = player1->isspectating() && player1->followplayercn >= 0 && (player1->spectatemode == SM_FOLLOW1ST || player1->spectatemode == SM_FOLLOW3RD || player1->spectatemode == SM_FOLLOW3RD_TRANSPARENT) ? getclient(player1->followplayercn) : NULL;
     if(!h) h = player1;
     exechook(HOOK_SP, "onHit", "%d %d %d %d %d", actor->clientnum, pl->clientnum, damage, gun, gib ? 1 : 0);
@@ -984,7 +985,7 @@ void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bo
         audiomgr.playsound(S_PAIN1+rnd(5), pl);
     }
 
-    if(local) damage = pl->dodamage(damage, gun);
+    if(local) damage = pl->dodamage(damage, gun, zone);
     else if(actor==player1) return;
 
     if(pl == h)
@@ -994,12 +995,12 @@ void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bo
         pl->damageroll(damage);
     }
 
-    if(pl->health<=0) { if(local) dokill(pl, actor, gib, gun >= 0 ? gun : actor->weaponsel->type); }
+    if(pl->health<=0) { if(local) dokill(pl, actor, gib, gun >= 0 ? gun : actor->weaponsel->type, zone); }
     else if(pl==player1) audiomgr.playsound(S_PAIN6, SP_HIGH);
     else audiomgr.playsound(S_PAIN1+rnd(5), pl);
 }
 
-void dokill(playerent *pl, playerent *act, bool gib, int gun)
+void dokill(playerent *pl, playerent *act, bool gib, int gun, int zone)
 {
     if(pl->state!=CS_ALIVE || intermission) return;
 
@@ -1007,7 +1008,7 @@ void dokill(playerent *pl, playerent *act, bool gib, int gun)
 
     const char *pname = pl == player1 ? "you" : colorname(pl);
     const char *aname = act == player1 ? "you" : colorname(act);
-    const char *death = killmessage(gun, gib);
+    const char *death = killmessage(gun, gib, zone);
     void (*outf)(const char *s, ...) = (pl == player1 || act == player1) ? hudoutf : conoutf;
 
     if(pl==act)
@@ -1032,11 +1033,8 @@ void dokill(playerent *pl, playerent *act, bool gib, int gun)
     }
     else if(!m_mp(gamemode)) act->frags += ( gib && gun != GUN_GRENADE && gun != GUN_SHOTGUN) ? 2 : 1;
 
-    if(gib)
-    {
-        if(pl!=act && gun == GUN_SNIPER) audiomgr.playsound(S_HEADSHOT, SP_LOW);
-        addgib(pl);
-    }
+    if(pl!=act && zone == HITZONE_HEAD) audiomgr.playsound(S_HEADSHOT, SP_LOW);
+    if(gib) addgib(pl);
 
     deathstate(pl);
     pl->deaths++;
@@ -1915,3 +1913,106 @@ void serverextension(char *ext, char *args)
     else addmsg(SV_EXTENSION, "rsi", ext, n);
 }
 COMMAND(serverextension, "ss");
+
+// ---- temporary hit zone self test (removed after verification) ----
+static const char *hitzonetestname(int zone)
+{
+    switch(zone)
+    {
+        case HITZONE_TORSO: return "TORSO";
+        case HITZONE_HEAD: return "HEAD";
+        case HITZONE_STOMACH: return "STOMACH";
+        case HITZONE_LEGS: return "LEGS";
+        case HITZONE_ARMS: return "ARMS";
+        default: return "NONE";
+    }
+}
+
+static void hitzoneselftestfn()
+{
+    int failures = 0;
+
+    playerent *d = player1;
+    vec so(d->o), shead(d->head);
+    float syaw = d->yaw, spitch = d->pitch, seye = d->eyeheight, srad = d->radius;
+    d->o = vec(0, 0, 0);
+    d->head = vec(0, 0, 0.293f);
+    d->yaw = d->pitch = 0;
+    d->eyeheight = 4.5f;
+    d->radius = 1.1f;
+
+    static const struct { const char *name; float fx, fy, fz, tx, ty, tz; int want; } checks[] =
+    {
+        { "front head",        0, -20, 0.55f,  0, 20, 0.55f,  HITZONE_HEAD },
+        { "front chest",       0, -20, -0.5f,  0, 20, -0.5f,  HITZONE_TORSO },
+        { "front stomach",     0, -20, -2.0f,  0, 20, -2.0f,  HITZONE_STOMACH },
+        { "front legs",        0, -20, -3.5f,  0, 20, -3.5f,  HITZONE_LEGS },
+        { "front feet",        0, -20, -4.4f,  0, 20, -4.4f,  HITZONE_LEGS },
+        { "over head",         0, -20, 1.5f,   0, 20, 1.5f,   HITZONE_NONE },
+        { "wide miss",         1.5f, -20, -0.5f, 1.5f, 20, -0.5f, HITZONE_NONE },
+        { "chest edge",        0.9f, -20, -0.5f, 0.9f, 20, -0.5f, HITZONE_ARMS },
+        { "side chest",        -20, 0, -0.5f,  20, 0, -0.5f,  HITZONE_ARMS },
+        { "back chest",        0, 20, -0.5f,   0, -20, -0.5f, HITZONE_TORSO },
+        { "legs edge",         0.9f, -20, -3.5f, 0.9f, 20, -3.5f, HITZONE_LEGS }
+    };
+    loopi((int)(sizeof(checks)/sizeof(checks[0])))
+    {
+        vec end;
+        int got = intersect(d, vec(checks[i].fx, checks[i].fy, checks[i].fz), vec(checks[i].tx, checks[i].ty, checks[i].tz), &end);
+        if(got != checks[i].want) { failures++; conoutf("hitzone FAIL %s: got %s want %s", checks[i].name, hitzonetestname(got), hitzonetestname(checks[i].want)); }
+    }
+
+    // crouching shrinks the hitbox with the eye height
+    d->eyeheight = 2.5f;
+    if(intersect(d, vec(0, -20, -2.0f), vec(0, 20, -2.0f)) != HITZONE_LEGS) { failures++; conoutf("hitzone FAIL crouch legs"); }
+    if(intersect(d, vec(0, -20, -0.5f), vec(0, 20, -0.5f)) != HITZONE_TORSO) { failures++; conoutf("hitzone FAIL crouch torso"); }
+    if(intersect(d, vec(0, -20, 0.55f), vec(0, 20, 0.55f)) != HITZONE_HEAD) { failures++; conoutf("hitzone FAIL crouch head"); }
+    d->eyeheight = 4.5f;
+
+    // yawing the player rotates the arms with the body
+    d->yaw = 90;
+    if(intersect(d, vec(-20, 0, -0.5f), vec(20, 0, -0.5f)) != HITZONE_TORSO) { failures++; conoutf("hitzone FAIL yaw torso"); }
+    if(intersect(d, vec(-20, 0.9f, -0.5f), vec(20, 0.9f, -0.5f)) != HITZONE_ARMS) { failures++; conoutf("hitzone FAIL yaw arms"); }
+    d->yaw = 0;
+
+    d->o = so; d->head = shead; d->yaw = syaw; d->pitch = spitch; d->eyeheight = seye; d->radius = srad;
+
+    // multipliers
+    if(hitzonescale(HITZONE_HEAD) != 3.0f || hitzonescale(HITZONE_STOMACH) != 0.9f || hitzonescale(HITZONE_LEGS) != 0.75f
+       || hitzonescale(HITZONE_ARMS) != 0.7f || hitzonescale(HITZONE_TORSO) != 1.0f) { failures++; conoutf("hitzone FAIL scale"); }
+
+    // armour applies to the chest but not the head
+    playerstate ps;
+    ps.health = 100; ps.armour = 100;
+    int dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
+    if(dmg != 60 || ps.health != 40 || ps.armour != 100) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
+    ps.health = 100; ps.armour = 100;
+    dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_TORSO);
+    if(dmg != 46 || ps.health != 54 || ps.armour != 76) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
+    ps.health = 100; ps.armour = 100;
+    dmg = ps.dodamage(INT_MAX, GUN_KNIFE, HITZONE_TORSO);
+    if(dmg != 100 || ps.health != 0 || ps.armour != 0) { failures++; conoutf("hitzone FAIL suicide"); }
+
+    // kill feed wording
+    if(strcmp(killmessage_for(GUN_PISTOL, false, HITZONE_HEAD), "headshot")) { failures++; conoutf("hitzone FAIL headshot message"); }
+    if(strcmp(killmessage_for(GUN_PISTOL, false, HITZONE_TORSO), "busted")) { failures++; conoutf("hitzone FAIL torso message"); }
+    if(strcmp(killmessage_for(GUN_KNIFE, true, HITZONE_LEGS), "slashed")) { failures++; conoutf("hitzone FAIL knife message"); }
+
+    // shotgun info round trip
+    loopi(7) loopj(SGDMGBONUS+1) loopk(NUMHITZONES)
+    {
+        int info = hitinfopack(j, k, i, i*3 % (SGRAYS+1), i*5 % (SGRAYS+1));
+        int bd, zn, c, m, o;
+        hitinfounpack(info, bd, zn, c, m, o);
+        if(bd != j || zn != k || c != i || m != i*3 % (SGRAYS+1) || o != i*5 % (SGRAYS+1))
+        {
+            failures++;
+            conoutf("hitzone FAIL pack %d %d %d", i, j, k);
+            break;
+        }
+    }
+
+    conoutf("hitzoneselftest done: %d failure%s", failures, failures == 1 ? "" : "s");
+}
+COMMANDN(hitzoneselftest, hitzoneselftestfn, "");
+

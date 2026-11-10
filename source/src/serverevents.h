@@ -68,20 +68,22 @@ void processevent(client *c, shotevent &e)
                 client *target = clients[h.target];
                 if(target->type==ST_EMPTY || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence) continue;
 
-                int rays = 1, damage = 0;
+                int rays = 1, damage = 0, zone = HITZONE_TORSO;
                 bool gib = false;
                 if(e.gun == GUN_SHOTGUN)
                 {
-                    int bonusdist = h.info&0xFF;
-                    int numhits_c = (h.info & 0x0000FF00) >> 8, numhits_m = (h.info & 0x00FF0000) >> 16, numhits_o = (h.info & 0xFF000000) >> 24;
+                    int bonusdist, numhits_c, numhits_m, numhits_o;
+                    hitinfounpack(h.info, bonusdist, zone, numhits_c, numhits_m, numhits_o);
                     tothits_c += numhits_c; tothits_m += numhits_m; tothits_o += numhits_o;
                     rays = numhits_c + numhits_m + numhits_o;
 
                     if(rays < 1 || tothits_c > SGRAYS || tothits_m > SGRAYS || tothits_o > SGRAYS || bonusdist > SGDMGBONUS) continue;
+                    if(zone < HITZONE_TORSO || zone >= NUMHITZONES) continue;
 
                     gib = rays == maxrays;
                     float fdamage = (SGDMGTOTAL/(21*100.0f)) * (numhits_o * SGCOdmg/10.0f + numhits_m * SGCMdmg/10.0f + numhits_c * SGCCdmg/10.0f);
                     fdamage += (float)bonusdist;
+                    fdamage *= hitzonescale(zone);
                     damage = (int)ceil(fdamage);
 #ifdef ACAC
                     if (!sg_engine(target, c, numhits_c, numhits_m, numhits_o, bonusdist)) continue;
@@ -89,18 +91,16 @@ void processevent(client *c, shotevent &e)
                 }
                 else
                 {
+                    zone = h.info;
+                    if(zone < HITZONE_TORSO || zone >= NUMHITZONES) zone = HITZONE_TORSO;
                     damage = rays*guns[e.gun].damage;
-                    gib = e.gun == GUN_KNIFE;
-                    if(e.gun == GUN_SNIPER && h.info != 0)
-                    {
-                        gib = true;
-                        damage *= 3;
-                    }
+                    gib = e.gun == GUN_KNIFE || (e.gun == GUN_SNIPER && zone == HITZONE_HEAD);
+                    damage = (int)(damage * hitzonescale(zone) + 0.5f);
                 }
                 totalrays += rays;
 
                 if(totalrays>maxrays) continue;
-                serverdamage(target, c, damage, e.gun, gib, h.dir);
+                serverdamage(target, c, damage, e.gun, gib, h.dir, zone);
             }
             break;
         }

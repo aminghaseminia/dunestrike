@@ -82,6 +82,52 @@ enum { GUN_KNIFE = 0, GUN_PISTOL, GUN_CARBINE, GUN_SHOTGUN, GUN_SUBGUN, GUN_SNIP
 #define SGMAXDMGLOC 84
 #define EXPDAMRAD 10
 
+// hit zones: what part of the body a shot lands on decides how much it hurts
+enum
+{
+    HITZONE_NONE = 0,
+    HITZONE_TORSO,      // chest and back, the default
+    HITZONE_HEAD,       // keep this at 2, older code treats 2 as a head hit
+    HITZONE_STOMACH,    // abdomen, softer than the chest
+    HITZONE_LEGS,       // below the hips, also makes the target limp
+    HITZONE_ARMS,       // the narrow silhouette along the sides
+    NUMHITZONES
+};
+
+// damage multiplier per hit zone, shared by client prediction and the server
+static inline float hitzonescale(int zone)
+{
+    switch(zone)
+    {
+        case HITZONE_HEAD:    return 3.0f;
+        case HITZONE_STOMACH: return 0.9f;
+        case HITZONE_LEGS:    return 0.75f;
+        case HITZONE_ARMS:    return 0.7f;
+        case HITZONE_TORSO:
+        default:              return 1.0f;
+    }
+}
+
+// a leg hit slows the target down for a while
+#define LIMPMILLIS 2500
+#define LIMPSPEED  0.6f
+
+// shotgun hits pack the close range bonus, the zone and the three pellet bands into one int:
+// bonusdist (7 bits) | zone (3) | close (5) | middle (5) | outer (5)
+static inline int hitinfopack(int bonusdist, int zone, int close, int middle, int outer)
+{
+    return (bonusdist & 0x7F) | ((zone & 0x7) << 7) | ((close & 0x1F) << 10) | ((middle & 0x1F) << 15) | ((outer & 0x1F) << 20);
+}
+
+static inline void hitinfounpack(int info, int &bonusdist, int &zone, int &close, int &middle, int &outer)
+{
+    bonusdist = info & 0x7F;
+    zone = (info >> 7) & 0x7;
+    close = (info >> 10) & 0x1F;
+    middle = (info >> 15) & 0x1F;
+    outer = (info >> 20) & 0x1F;
+}
+
 struct itemstat { int add, start, max, sound; };
 extern itemstat ammostats[NUMGUNS];
 extern itemstat powerupstats[I_ARMOUR-I_HEALTH+1];
@@ -100,6 +146,13 @@ enum { TEAM_CLA = 0, TEAM_RVSF, TEAM_CLA_SPECT, TEAM_RVSF_SPECT, TEAM_SPECT, TEA
 extern const char *teamnames[];
 extern const char *teamnames_s[];
 extern const char *killmessages[2][NUMGUNS];
+
+// a headshot kill reads the same no matter which gun did it
+static inline const char *killmessage_for(int gun, bool gib, int zone)
+{
+    if(zone == HITZONE_HEAD) return "headshot";
+    return valid_weapon(gun) ? killmessages[gib ? 1 : 0][gun] : "";
+}
 
 #define isteam(a,b)   (m_teammode && (a) == (b))
 #define team_opposite(o) (team_isvalid(o) && (o) < TEAM_SPECT ? (o) ^ 1 : TEAM_SPECT)
@@ -138,6 +191,7 @@ public:
     uchar state, type;
     float eyeheightvel;
     int last_pos;
+    int limpuntil;                      // a leg wound slows this ent down until then
 
     physent() : o(0, 0, 0), deltapos(0, 0, 0), newpos(0, 0, 0), yaw(270), pitch(0), roll(0), pitchvel(0),
             crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0)
@@ -160,6 +214,7 @@ public:
         timeinair = lastjump = lastsplash = 0;
         onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = false;
         last_pos = 0;
+        limpuntil = 0;
     }
 
     virtual void oncollision() {}
@@ -364,13 +419,20 @@ public:
     }
 
     // just subtract damage here, can set death, etc. later in code calling this
-    int dodamage(int damage, int gun)
+    int dodamage(int damage, int gun, int zone = HITZONE_TORSO)
     {
         guninfo gi = guns[gun];
         if(damage == INT_MAX)
         {
             damage = health;
             armour = health = 0;
+            return damage;
+        }
+
+        // armour is a vest: it does not protect the head
+        if(zone == HITZONE_HEAD)
+        {
+            health -= damage;
             return damage;
         }
 

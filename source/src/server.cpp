@@ -1730,7 +1730,7 @@ void arenacheck()
 
 // bomb defusal mode
 
-void serverdamage(client *target, client *actor, int damage, int gun, bool gib, const vec &hitpush);
+void serverdamage(client *target, client *actor, int damage, int gun, bool gib, const vec &hitpush = vec(0, 0, 0), int zone = HITZONE_TORSO);
 
 SERVPAR(bomb_roundlimit, 1, 8, 30, "DNumber of rounds needed to win a bomb defusal match");
 SERVPAR(bomb_rounddelay, 1, 5, 30, "DSeconds between bomb defusal rounds");
@@ -2355,16 +2355,16 @@ void checkitemspawns(int diff)
     }
 }
 
-void serverdamage(client *target, client *actor, int damage, int gun, bool gib, const vec &hitpush = vec(0, 0, 0))
+void serverdamage(client *target, client *actor, int damage, int gun, bool gib, const vec &hitpush, int zone)
 {
     if ( m_arena && gun == GUN_GRENADE && sg->arenaroundstartmillis + 2000 > sg->gamemillis && target != actor ) return;
     clientstate &ts = target->state;
-    ts.dodamage(damage, gun);
+    ts.dodamage(damage, gun, zone);
     if(damage < INT_MAX)
     {
         actor->state.damage += damage;
 
-        sendf(-1, 1, "ri7", gib ? SV_GIBDAMAGE : SV_DAMAGE, target->clientnum, actor->clientnum, gun, damage, ts.armour, ts.health);
+        sendf(-1, 1, "ri8", gib ? SV_GIBDAMAGE : SV_DAMAGE, target->clientnum, actor->clientnum, gun, damage, ts.armour, ts.health, zone);
 
         if (!isteam(target->team, actor->team))
         {
@@ -2418,7 +2418,7 @@ void serverdamage(client *target, client *actor, int damage, int gun, bool gib, 
             suic = true;
             mlog(DSLOG_INFO, "[%s] %s suicided", actor->hostname, actor->name);
         }
-        sendf(-1, 1, "ri5", gib ? SV_GIBDIED : SV_DIED, target->clientnum, actor->clientnum, actor->state.frags, gun);
+        sendf(-1, 1, "ri6", gib ? SV_GIBDIED : SV_DIED, target->clientnum, actor->clientnum, actor->state.frags, gun, zone);
         if((suic || tk) && (m_htf || m_ktf) && targethasflag >= 0)
         {
             actor->state.flagscore--;
@@ -2430,7 +2430,7 @@ void serverdamage(client *target, client *actor, int damage, int gun, bool gib, 
         ts.state = CS_DEAD;
         ts.lastdeath = sg->gamemillis;
         if(m_bomb) bomb_ondeath(target);
-        if(!suic) mlog(DSLOG_INFO, "[%s] %s %s%s %s", actor->hostname, actor->name, valid_weapon(gun) ? killmessages[gib ? 1 : 0][gun] : "smurfed", tk ? " their teammate" : "", target->name);
+        if(!suic) mlog(DSLOG_INFO, "[%s] %s %s%s %s", actor->hostname, actor->name, valid_weapon(gun) ? killmessage_for(gun, gib, zone) : "smurfed", tk ? " their teammate" : "", target->name);
         if(m_flags_ && targethasflag >= 0)
         {
             if(m_ctf)
