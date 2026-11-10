@@ -495,14 +495,14 @@ const char *modefullnames[] =
     "team deathmatch", "coopedit", "deathmatch", "survivor",
     "team survivor", "capture the flag", "pistol frenzy", "bot team deathmatch", "bot deathmatch", "last swiss standing",
     "one shot, one kill", "team one shot, one kill", "bot one shot, one kill", "hunt the flag", "team keep the flag",
-    "keep the flag", "team pistol frenzy", "team last swiss standing", "bot pistol frenzy", "bot last swiss standing", "bot team survivor", "bot team one shot, one kill"
+    "keep the flag", "team pistol frenzy", "team last swiss standing", "bot pistol frenzy", "bot last swiss standing", "bot team survivor", "bot team one shot, one kill", "bomb defusal"
 };
 
 const char *modeacronymnames[] =
 {
     "DEMO",
     "TDM", "coop", "DM", "SURV", "TSURV", "CTF", "PF", "BTDM", "BDM", "LSS",
-    "OSOK", "TOSOK", "BOSOK", "HTF", "TKTF", "KTF", "TPF", "TLSS", "BPF", "BLSS", "BTSURV", "BTOSOK"
+    "OSOK", "TOSOK", "BOSOK", "HTF", "TKTF", "KTF", "TPF", "TLSS", "BPF", "BLSS", "BTSURV", "BTOSOK", "BOMB"
 };
 
 const char *voteerrors[] = { "voting is currently disabled", "there is already a vote pending", "already voted", "can't vote that often", "this vote is not allowed in the current environment (singleplayer/multiplayer)", "no permission", "invalid vote", "server denied your call", "the next map/mode is already set" };
@@ -607,6 +607,7 @@ static const int msgsizes[] =               // size inclusive message token, 0 f
     SV_PAUSEMODE, 1,
     SV_GETVITA, 2, SV_VITADATA, 0,
     SV_VOICEDATA, 0, SV_VOICEOFF, 1, SV_VOICESUPPORT, 2, SV_VOICESTATE, 3,
+    SV_BOMBINFO, 0, SV_BOMBACTION, 0,
     -1
 };
 
@@ -634,7 +635,7 @@ static const int lastclactions[] =               // actions for afk checking
     SV_LISTDEMOS, SV_GETDEMO,
     SV_SWITCHNAME, SV_SWITCHSKIN, SV_SWITCHTEAM,
     SV_GETVITA,
-    SV_VOICEDATA, SV_VOICEOFF
+    SV_VOICEDATA, SV_VOICEOFF, SV_BOMBACTION
 };
 
 int lastclactionslookup(int msg)

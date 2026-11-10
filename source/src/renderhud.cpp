@@ -940,6 +940,64 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         if(gametimedisplay) draw_text(gtime, (VIRTW-225-10)*2 - (text_width(gtime)/2 + FONTH/2), 20);
     }
 
+    if(m_bomb && !intermission)
+    {
+        int y = 20 + 2*FONTH;
+        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d", bombinfo.wins[0], bombinfo.wins[1], bombinfo.round);
+        draw_text(scoreline, (VIRTW*2 - text_width(scoreline))/2, y, 255, 255, 255);
+
+        const char *role = "spectating";
+        if(team_isactive(player1->team))
+            role = team_base(player1->team) == bombinfo.attackerteam ? "attacking" : "defending";
+        defformatstring(roleline)("\f3you are %s", role);
+        draw_text(roleline, (VIRTW*2 - text_width(roleline))/2, y + FONTH, 255, 255, 255);
+
+        int elapsed = lastmillis - bombinfo.updatetime;
+        string timerline;
+        if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
+        {
+            int remaining = max(0, bombinfo.timeremaining - elapsed);
+            formatstring(timerline)("\f1BOMB %02d:%02d", remaining/60000, (remaining/1000)%60);
+            draw_text(timerline, (VIRTW*2 - text_width(timerline))/2, y + 2*FONTH, 255, 255, 255);
+        }
+        else if(bombinfo.state == BOMB_LIVE)
+        {
+            int remaining = max(0, bombinfo.roundremaining - elapsed);
+            formatstring(timerline)("\f3round time %02d:%02d", remaining/60000, (remaining/1000)%60);
+            draw_text(timerline, (VIRTW*2 - text_width(timerline))/2, y + 2*FONTH, 255, 255, 255);
+        }
+
+        if(bombinfo.state == BOMB_PLANTING || bombinfo.state == BOMB_DEFUSING)
+        {
+            int remaining = max(0, bombinfo.actionremaining - elapsed);
+            int pct = bombinfo.actionduration > 0 ? 100 - (remaining * 100 / bombinfo.actionduration) : 0;
+            if(pct < 0) pct = 0;
+            else if(pct > 100) pct = 100;
+            defformatstring(actionline)("\f3%s %d%%", bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING", pct);
+            draw_text(actionline, (VIRTW*2 - text_width(actionline))/2, y + 3*FONTH, 255, 255, 255);
+        }
+
+        const char *hint = NULL;
+        if(bombinfo.state == BOMB_LIVE && bombinfo.carrier == player1->clientnum)
+        {
+            bool atsite = false;
+            int activesite = 1 - bombinfo.attackerteam;
+            if(bombinfo.sites[activesite].x >= 0)
+            {
+                float dx = player1->o.x - bombinfo.sites[activesite].x, dy = player1->o.y - bombinfo.sites[activesite].y;
+                if(dx*dx + dy*dy <= 9.0f) atsite = true;
+            }
+            hint = atsite ? "\f1press F or right-click to plant the bomb" : "\f3you have the bomb - go to the marked site";
+        }
+        else if(bombinfo.state == BOMB_PLANTED && team_isactive(player1->team) && team_base(player1->team) != bombinfo.attackerteam)
+        {
+            if(player1->o.dist(bombinfo.pos) <= 4.0f) hint = "\f1press F or right-click to defuse the bomb";
+        }
+        else if(bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)
+            hint = "\f3the bomb is on the ground";
+        if(hint) draw_text(hint, (VIRTW*2 - text_width(hint))/2, y + 4*FONTH, 255, 255, 255);
+    }
+
     if(hidevote < 2 && multiplayer(NULL))
     {
         extern votedisplayinfo *curvote;

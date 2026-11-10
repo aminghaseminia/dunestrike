@@ -578,6 +578,38 @@ extern void addsleep(int msec, const char *cmd, bool persist = false);
 extern void resetsleep(bool force = false);
 extern int lastpm;
 //game mode extras
+struct bombinfo_s
+{
+    int state, round, attackerteam;
+    int wins[2];
+    int carrier, site;
+    int dropped;
+    vec pos;
+    int timeremaining, updatetime;
+    int actionactor, actionremaining, actionduration;
+    int roundremaining;
+    int result, reason;
+    vec sites[2];
+
+    bombinfo_s() { reset(); }
+    void reset()
+    {
+        state = BOMB_WAIT;
+        round = attackerteam = 0;
+        wins[0] = wins[1] = 0;
+        carrier = site = -1;
+        dropped = 0;
+        pos = vec(0, 0, 0);
+        timeremaining = updatetime = 0;
+        actionactor = -1;
+        actionremaining = actionduration = 0;
+        roundremaining = 0;
+        result = reason = 0;
+        sites[0] = sites[1] = vec(-1, -1, 0);
+    }
+};
+extern bombinfo_s bombinfo;
+extern void bombinfochanged(int oldstate);
 extern void flagpickup(int fln);
 extern void tryflagdrop(bool manual = false);
 extern void flagreturn(int fln);

@@ -347,6 +347,20 @@ void renderentities()
                 break;
         }
     }
+    if(m_bomb)
+    {
+        int activesite = 1 - bombinfo.attackerteam;
+        if(bombinfo.sites[activesite].x >= 0 && !OUTBORD(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y))
+        {
+            float x = bombinfo.sites[activesite].x, y = bombinfo.sites[activesite].y;
+            defformatstring(path)("pickups/flags/%s", activesite ? "RVSF" : "CLA");
+            rendermodel(path, ANIM_FLAG|ANIM_LOOP, 0, 0, vec(x, y, (float)S(int(x), int(y))->floor), 0, 0, 0, 120.0f);
+        }
+        if(bombinfo.pos.x >= 0 && !OUTBORD(bombinfo.pos.x, bombinfo.pos.y) &&
+           (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING ||
+            (bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)))
+            rendermodel("pickups/nades", ANIM_MAPMODEL|ANIM_LOOP|ANIM_DYNALLOC, 0, 0, bombinfo.pos, 0, lastmillis/10.0f, 0);
+    }
 }
 
 // these two functions are called when the server acknowledges that you really

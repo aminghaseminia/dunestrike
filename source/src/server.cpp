@@ -36,6 +36,7 @@ struct servergame
     int lastfillup;
     vector<server_entity> sents;
     sflaginfo sflaginfos[2];
+    sbombinfo bomb;
 
     bool recordpackets;
     int demosequence;   // # of demo to fetch with F10 (usually curent game, until one minute after it finished)
@@ -63,6 +64,7 @@ struct servergame
         lastfillup = 0;
         sents.setsize(0);
         loopi(2) sflaginfos[i].actor_cn = -1;
+        bomb.reset();
         recordpackets = false;
         demosequence = 0;
         curmap = NULL;
@@ -1726,6 +1728,450 @@ void arenacheck()
     if(sg->autoteam && m_teammode) refillteams(true);
 }
 
+// bomb defusal mode
+
+void serverdamage(client *target, client *actor, int damage, int gun, bool gib, const vec &hitpush);
+
+SERVPAR(bomb_roundlimit, 1, 8, 30, "DNumber of rounds needed to win a bomb defusal match");
+SERVPAR(bomb_rounddelay, 1, 5, 30, "DSeconds between bomb defusal rounds");
+SERVPAR(bomb_startdelay, 0, 3, 30, "DSeconds before the first bomb defusal round starts");
+SERVPAR(bomb_roundtime, 30, 90, 900, "DSeconds in a bomb defusal round before defenders win");
+SERVPAR(bomb_planttime, 1, 3, 30, "DSeconds needed to plant the bomb");
+SERVPAR(bomb_defusetime, 1, 5, 30, "DSeconds needed to defuse the bomb");
+SERVPAR(bomb_timer, 10, 40, 180, "DSeconds from planting until the bomb explodes");
+SERVPAR(bomb_siteradius, 1, 3, 20, "DMaximum distance from a bomb site centre");
+SERVPAR(bomb_pickupradius, 1, 3, 20, "DMaximum distance to pick up a dropped bomb");
+SERVPAR(bomb_exploderadius, 1, 18, 100, "DRadius of the bomb explosion");
+SERVPAR(bomb_explodedamage, 0, 200, 1000, "DDamage at the centre of the bomb explosion");
+
+static int bombsiteat(const vec &o)
+{
+    int site = 1 - sg->bomb.attackerteam; // defenders' flag base is the active site
+    if(site < 0 || site > 1 || sg->bomb.sites[site][0] < 0) return -1;
+    float dx = o.x - sg->bomb.sites[site][0], dy = o.y - sg->bomb.sites[site][1];
+    return dx*dx + dy*dy <= float(bomb_siteradius) * bomb_siteradius ? site : -1;
+}
+
+static bool bombdistok(const vec &o)
+{
+    if(sg->bomb.pos[0] < 0) return false;
+    vec p(sg->bomb.pos[0], sg->bomb.pos[1], sg->bomb.pos[2]);
+    return o.dist(p) <= bomb_siteradius;
+}
+
+static int bombalive(int team)
+{
+    int alive = 0;
+    loopv(clients)
+    {
+        client *c = clients[i];
+        if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap) continue;
+        if(!team_isactive(c->team) || team_base(c->team) != team) continue;
+        if(c->state.state == CS_ALIVE) alive++;
+    }
+    return alive;
+}
+
+static void putbombinfo(packetbuf &p)
+{
+    sbombinfo &b = sg->bomb;
+    putint(p, SV_BOMBINFO);
+    putint(p, b.state);
+    putint(p, b.round);
+    putint(p, b.attackerteam);
+    putint(p, b.wins[0]);
+    putint(p, b.wins[1]);
+    putint(p, b.carrier);
+    putint(p, b.site);
+    putint(p, b.dropped);
+    loopi(3) putint(p, b.pos[i]);
+    putint(p, b.timerend > sg->gamemillis ? b.timerend - sg->gamemillis : 0);
+    putint(p, b.actionactor);
+    putint(p, b.actionend > sg->gamemillis ? b.actionend - sg->gamemillis : 0);
+    putint(p, b.actionduration);
+    putint(p, b.roundend > sg->gamemillis ? b.roundend - sg->gamemillis : 0);
+    putint(p, b.result);
+    putint(p, b.reason);
+    loopi(2) loopj(2) putint(p, b.sites[i][j]);
+}
+
+void sendbombinfo(int cn = -1)
+{
+    if(!m_bomb) return;
+    packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+    putbombinfo(p);
+    sendpacket(cn, 1, p.finalize());
+    sg->bomb.nextsend = sg->gamemillis + 1000;
+}
+
+void bomb_init()
+{
+    sg->bomb.reset();
+    if(!m_bomb) return;
+    if(sg->curmap && sg->curmap->entstats.hasflags)
+    {
+        loopi(2)
+        {
+            int ent = sg->curmap->entstats.flagents[i];
+            sg->bomb.sites[i][0] = sg->curmap->entpos_x[ent];
+            sg->bomb.sites[i][1] = sg->curmap->entpos_y[ent];
+        }
+    }
+    sg->bomb.state = BOMB_WAIT;
+    sg->bomb.nextround = sg->gamemillis + bomb_startdelay * 1000;
+    sg->bomb.nextsend = sg->gamemillis;
+}
+
+void bomb_startround()
+{
+    if(!m_bomb || sg->interm || sg->forceintermission) return;
+    if(sg->bomb.sites[0][0] < 0 || sg->bomb.sites[1][0] < 0)
+    {
+        sendservmsg("\f3Bomb mode needs a map with two CTF flag entities");
+        sg->bomb.state = BOMB_WAIT;
+        sg->bomb.nextround = sg->gamemillis + 10000;
+        return;
+    }
+
+    int attackers = 0, defenders = 0;
+    loopv(clients)
+    {
+        client *c = clients[i];
+        if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap || !team_isactive(c->team)) continue;
+        if(team_base(c->team) == TEAM_CLA) attackers++;
+        else defenders++;
+    }
+    if(!attackers || !defenders)
+    {
+        sg->bomb.state = BOMB_WAIT;
+        sg->bomb.nextround = sg->gamemillis + 5000;
+        return;
+    }
+
+    sbombinfo &b = sg->bomb;
+    b.round++;
+    b.state = BOMB_LIVE;
+    b.attackerteam = (b.round & 1) ? TEAM_CLA : TEAM_RVSF;
+    b.carrier = b.site = b.actionactor = -1;
+    b.dropped = 0;
+    b.timerend = b.actionstart = b.actionend = b.actionduration = 0;
+    b.roundstart = sg->gamemillis;
+    b.roundend = sg->gamemillis + bomb_roundtime * 1000;
+    b.nextround = 0;
+    b.result = BOMB_RESULT_NONE;
+    b.reason = BOMB_REASON_NONE;
+    loopi(3) b.pos[i] = 0;
+
+    distributespawns();
+    checkitemspawns(60000);
+    loopv(clients)
+    {
+        client *c = clients[i];
+        if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap) continue;
+        if(!team_isactive(c->team)) continue;
+        sendspawn(c);
+    }
+
+    int carrier = -1, candidates = 0;
+    loopv(clients)
+    {
+        client *c = clients[i];
+        if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap) continue;
+        if(!team_isactive(c->team) || team_base(c->team) != b.attackerteam) continue;
+        candidates++;
+        if(rnd(candidates) == 0) carrier = i;
+    }
+    b.carrier = carrier;
+    sendbombinfo();
+    defformatstring(msg)("\f3Round %d: \f1%s attack\f3, \f1%s defend", b.round, team_basestring(b.attackerteam), team_basestring(team_opposite(b.attackerteam)));
+    sendservmsg(msg);
+    mlog(DSLOG_INFO, "bomb round %d started, attackers %s, carrier %s", b.round, team_string(b.attackerteam), carrier >= 0 ? clients[carrier]->name : "none");
+}
+
+void bomb_endround(int winner, int reason)
+{
+    if(!m_bomb || sg->bomb.state == BOMB_END) return;
+    sbombinfo &b = sg->bomb;
+    b.state = BOMB_END;
+    b.nextround = sg->gamemillis + bomb_rounddelay * 1000;
+    b.timerend = b.actionend = b.actionstart = b.actionduration = 0;
+    b.actionactor = -1;
+    b.result = team_base(winner) == b.attackerteam ? BOMB_RESULT_ATTACKERS : BOMB_RESULT_DEFENDERS;
+    b.reason = reason;
+    if(team_isvalid(winner)) b.wins[team_base(winner)]++;
+    sendbombinfo();
+
+    const char *text = "";
+    switch(reason)
+    {
+        case BOMB_REASON_EXPLODED: text = "\f3The bomb exploded - attackers win the round"; break;
+        case BOMB_REASON_DEFUSED: text = "\f3The bomb was defused - defenders win the round"; break;
+        case BOMB_REASON_TIME: text = "\f3Time ran out - defenders win the round"; break;
+        default: text = "\f3Round over"; break;
+    }
+    sendservmsg(text);
+    mlog(DSLOG_INFO, "bomb round %d ended: winner %s, reason %d, score %d-%d", b.round, team_string(winner), reason, b.wins[0], b.wins[1]);
+
+    if(b.wins[0] >= bomb_roundlimit || b.wins[1] >= bomb_roundlimit)
+    {
+        sendservmsg("\f2Bomb defusal match over");
+        sg->forceintermission = true;
+    }
+}
+
+void bomb_explode()
+{
+    if(!m_bomb) return;
+    sbombinfo &b = sg->bomb;
+    int planter = b.actionactor;
+    vec pos(b.pos[0], b.pos[1], b.pos[2]);
+    int attacker = b.attackerteam;
+    bomb_endround(attacker, BOMB_REASON_EXPLODED);
+    loopv(clients)
+    {
+        client *c = clients[i];
+        if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap || c->state.state != CS_ALIVE) continue;
+        if(!team_isactive(c->team)) continue;
+        float dist = c->state.o.dist(pos);
+        if(dist > bomb_exploderadius) continue;
+        int damage = int(bomb_explodedamage * (1.0f - dist / bomb_exploderadius));
+        if(damage <= 0) continue;
+        client *actor = valid_client(planter) ? clients[planter] : c;
+        serverdamage(c, actor, damage, GUN_GRENADE, false, vec(0, 0, 0));
+    }
+}
+
+void bomb_drop(int cn, const vec &o)
+{
+    sbombinfo &b = sg->bomb;
+    if(b.carrier != cn) return;
+    b.carrier = -1;
+    b.dropped = 1;
+    int x = (int)o.x, y = (int)o.y, z = (int)o.z;
+    if(x < 0 || y < 0 || x >= 100000 || y >= 100000)
+    {
+        int site = 1 - b.attackerteam;
+        if(site >= 0 && site < 2 && b.sites[site][0] >= 0)
+        {
+            x = b.sites[site][0];
+            y = b.sites[site][1];
+            z = 0;
+        }
+        else x = y = z = 0;
+    }
+    b.pos[0] = x;
+    b.pos[1] = y;
+    b.pos[2] = z;
+    if(b.state == BOMB_PLANTING && b.actionactor == cn)
+    {
+        b.state = BOMB_LIVE;
+        b.site = -1;
+        b.actionactor = -1;
+        b.actionend = b.actionstart = b.actionduration = 0;
+    }
+    sendbombinfo();
+}
+
+void bomb_ondeath(client *c)
+{
+    if(!m_bomb) return;
+    if(sg->bomb.carrier == c->clientnum) bomb_drop(c->clientnum, c->state.o);
+    if(sg->bomb.state == BOMB_PLANTING && sg->bomb.actionactor == c->clientnum)
+    {
+        sg->bomb.state = BOMB_LIVE;
+        sg->bomb.site = -1;
+        sg->bomb.actionactor = -1;
+        sg->bomb.actionend = sg->bomb.actionstart = sg->bomb.actionduration = 0;
+        sendbombinfo();
+    }
+    else if(sg->bomb.state == BOMB_DEFUSING && sg->bomb.actionactor == c->clientnum)
+    {
+        sg->bomb.state = BOMB_PLANTED;
+        sg->bomb.actionactor = -1;
+        sg->bomb.actionend = sg->bomb.actionstart = sg->bomb.actionduration = 0;
+        sendbombinfo();
+    }
+}
+
+void bomb_disconnect(int cn)
+{
+    if(!m_bomb) return;
+    if(valid_client(cn) && sg->bomb.carrier == cn) bomb_drop(cn, clients[cn]->state.o);
+    if(sg->bomb.actionactor == cn)
+    {
+        if(sg->bomb.state == BOMB_PLANTING) sg->bomb.state = BOMB_LIVE;
+        else if(sg->bomb.state == BOMB_DEFUSING) sg->bomb.state = BOMB_PLANTED;
+        sg->bomb.actionactor = -1;
+        sg->bomb.actionend = sg->bomb.actionstart = sg->bomb.actionduration = 0;
+        sendbombinfo();
+    }
+}
+
+void bombaction(client *cl)
+{
+    if(!m_bomb || !cl || cl->state.state != CS_ALIVE) return;
+    sbombinfo &b = sg->bomb;
+    if(b.state == BOMB_LIVE && b.carrier == cl->clientnum)
+    {
+        int site = bombsiteat(cl->state.o);
+        if(site < 0)
+        {
+            sendservmsg("\f3You must be at a bomb site to plant", cl->clientnum);
+            return;
+        }
+        b.state = BOMB_PLANTING;
+        b.site = site;
+        b.actionactor = cl->clientnum;
+        b.actionstart = sg->gamemillis;
+        b.actionduration = bomb_planttime * 1000;
+        b.actionend = sg->gamemillis + b.actionduration;
+        b.pos[0] = (int)cl->state.o.x;
+        b.pos[1] = (int)cl->state.o.y;
+        b.pos[2] = (int)cl->state.o.z;
+        sendbombinfo();
+        sendservmsg("\f3The bomb is being planted");
+    }
+    else if(b.state == BOMB_PLANTED && team_isactive(cl->team) && team_base(cl->team) != b.attackerteam && bombdistok(cl->state.o))
+    {
+        b.state = BOMB_DEFUSING;
+        b.actionactor = cl->clientnum;
+        b.actionstart = sg->gamemillis;
+        b.actionduration = bomb_defusetime * 1000;
+        b.actionend = sg->gamemillis + b.actionduration;
+        sendbombinfo();
+        sendservmsg("\f3The bomb is being defused");
+    }
+}
+
+void bomb_update()
+{
+    if(!m_bomb || sg->interm || sg->sispaused || sg->forceintermission || sg->gamemillis >= sg->gamelimit) return;
+    sbombinfo &b = sg->bomb;
+
+    switch(b.state)
+    {
+        case BOMB_WAIT:
+        case BOMB_END:
+            if(b.nextround && sg->gamemillis >= b.nextround) bomb_startround();
+            return;
+
+        case BOMB_LIVE:
+        {
+            if(sg->gamemillis >= b.roundstart + 3000)
+            {
+                if(b.carrier >= 0)
+                {
+                    client *c = valid_client(b.carrier) ? clients[b.carrier] : NULL;
+                    bool drop = !c || !c->isauthed || !c->isonrightmap || !team_isactive(c->team) || team_base(c->team) != b.attackerteam;
+                    if(!drop && c->state.state != CS_ALIVE)
+                        drop = c->state.lastdeath >= b.roundstart;
+                    if(drop) bomb_drop(b.carrier, c ? c->state.o : vec(b.pos[0], b.pos[1], b.pos[2]));
+                }
+                if(b.carrier < 0 && b.dropped)
+                {
+                    loopv(clients)
+                    {
+                        client *c = clients[i];
+                        if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap || c->state.state != CS_ALIVE) continue;
+                        if(!team_isactive(c->team) || team_base(c->team) != b.attackerteam) continue;
+                        vec p(b.pos[0], b.pos[1], b.pos[2]);
+                        if(c->state.o.dist(p) > bomb_pickupradius) continue;
+                        b.carrier = i;
+                        b.dropped = 0;
+                        sendbombinfo();
+                        break;
+                    }
+                }
+            }
+            if(sg->gamemillis >= b.roundend)
+            {
+                bomb_endround(team_opposite(b.attackerteam), BOMB_REASON_TIME);
+                return;
+            }
+            if(sg->gamemillis < b.roundstart + 3000) break;
+            int attackers = bombalive(b.attackerteam), defenders = bombalive(team_opposite(b.attackerteam));
+            if(!attackers) bomb_endround(team_opposite(b.attackerteam), BOMB_REASON_ELIMINATED);
+            else if(!defenders) bomb_endround(b.attackerteam, BOMB_REASON_ELIMINATED);
+            break;
+        }
+
+        case BOMB_PLANTING:
+        {
+            client *c = valid_client(b.actionactor) ? clients[b.actionactor] : NULL;
+            if(!c || c->state.state != CS_ALIVE || b.carrier != b.actionactor || bombsiteat(c->state.o) != b.site)
+            {
+                if(b.carrier >= 0)
+                {
+                    b.state = BOMB_LIVE;
+                    b.site = -1;
+                }
+                else b.state = BOMB_LIVE;
+                b.actionactor = -1;
+                b.actionend = b.actionstart = b.actionduration = 0;
+                sendbombinfo();
+                break;
+            }
+            if(sg->gamemillis >= b.actionend)
+            {
+                b.state = BOMB_PLANTED;
+                b.carrier = -1;
+                b.dropped = 0;
+                b.timerend = sg->gamemillis + bomb_timer * 1000;
+                b.actionactor = -1;
+                b.actionend = b.actionstart = b.actionduration = 0;
+                sendbombinfo();
+                sendservmsg("\f3The bomb has been planted!");
+                mlog(DSLOG_INFO, "bomb planted at site %d", b.site);
+            }
+            break;
+        }
+
+        case BOMB_PLANTED:
+            if(sg->gamemillis >= b.timerend)
+            {
+                bomb_explode();
+                return;
+            }
+            if(!bombalive(team_opposite(b.attackerteam)))
+                bomb_endround(b.attackerteam, BOMB_REASON_ELIMINATED);
+            break;
+
+        case BOMB_DEFUSING:
+        {
+            client *c = valid_client(b.actionactor) ? clients[b.actionactor] : NULL;
+            if(!c || c->state.state != CS_ALIVE || !team_isactive(c->team) || team_base(c->team) == b.attackerteam || !bombdistok(c->state.o))
+            {
+                b.state = BOMB_PLANTED;
+                b.actionactor = -1;
+                b.actionend = b.actionstart = b.actionduration = 0;
+                sendbombinfo();
+                break;
+            }
+            if(sg->gamemillis >= b.timerend)
+            {
+                bomb_explode();
+                return;
+            }
+            if(sg->gamemillis >= b.actionend)
+            {
+                bomb_endround(team_opposite(b.attackerteam), BOMB_REASON_DEFUSED);
+                return;
+            }
+            break;
+        }
+    }
+
+    if(b.state == BOMB_LIVE || b.state == BOMB_PLANTING || b.state == BOMB_PLANTED || b.state == BOMB_DEFUSING)
+        if(sg->gamemillis >= b.nextsend) sendbombinfo();
+}
+
+bool bomb_canspawn(client *cl)
+{
+    if(!m_bomb || !cl || !cl->isauthed || !cl->isonrightmap || !team_isactive(cl->team)) return false;
+    if(sg->bomb.state == BOMB_WAIT || sg->bomb.state == BOMB_END) return false;
+    return cl->state.lastspawn < sg->bomb.roundstart;
+}
+
 #define SPAMREPEATINTERVAL  20   // detect doubled lines only if interval < 20 seconds
 #define SPAMMAXREPEAT       3    // 4th time is SPAM
 #define SPAMCHARPERMINUTE   220  // good typist
@@ -1983,6 +2429,7 @@ void serverdamage(client *target, client *actor, int damage, int gun, bool gib, 
         target->position.setsize(0);
         ts.state = CS_DEAD;
         ts.lastdeath = sg->gamemillis;
+        if(m_bomb) bomb_ondeath(target);
         if(!suic) mlog(DSLOG_INFO, "[%s] %s %s%s %s", actor->hostname, actor->name, valid_weapon(gun) ? killmessages[gib ? 1 : 0][gun] : "smurfed", tk ? " their teammate" : "", target->name);
         if(m_flags_ && targethasflag >= 0)
         {
@@ -2132,6 +2579,9 @@ bool updateclientteam(int cln, int newteam, int ftr)
         else if(sg->mastermode != MM_MATCH || !m_teammode) newteam = TEAM_SPECT; // only match mode (team) has more than one spect team
     }
     if(cl.team == newteam && ftr != FTR_AUTOTEAM) return true; // no change
+    if(m_bomb && ftr == FTR_PLAYERWISH && team_isactive(cl.team) && team_isactive(newteam) && newteam != cl.team &&
+       sg->bomb.state != BOMB_WAIT && sg->bomb.state != BOMB_END)
+        return false; // no switching sides in the middle of a bomb round
     if(cl.team != newteam) sdropflag(cl.clientnum);
     if(ftr != FTR_INFO && (team_isspect(newteam) || (team_isactive(newteam) && team_isactive(cl.team)))) forcedeath(&cl);
     sendf(-1, 1, "riii", SV_SETTEAM, cln, newteam | ((ftr == FTR_SILENTFORCE ? FTR_INFO : ftr) << 4));
@@ -2367,6 +2817,7 @@ void resetserver(const char *newname, int newmode, int newtime)
     }
     else savedscores.shrink(0);
     ctfreset();
+    sg->bomb.reset();
 
     sg->sispaused = false;
     sg->nextmapname[0] = '\0';
@@ -2453,6 +2904,7 @@ void startgame(const char *newname, int newmode, int newtime, bool notify)
             }
         }
         else if(isdedicated && sg->smode != GMODE_COOPEDIT) fatal("servermap not found"); // coop requires 'sendmap' if not available
+        bomb_init();
         if(notify)
         {
             // change map
@@ -2488,6 +2940,7 @@ void startgame(const char *newname, int newmode, int newtime, bool notify)
         }
         if(numnonlocalclients() > 0) setupdemorecord();
         if(notify && m_ktf) sendflaginfo();
+        if(notify && m_bomb) sendbombinfo();
         if(notify) senddisconnectedscores(-1);
     }
 }
@@ -2832,6 +3285,7 @@ void disconnect_client(int n, int reason)
     ASSERT(ismainthread());
     if(!clients.inrange(n) || clients[n]->type!=ST_TCPIP) return;
     sdropflag(n);
+    if(m_bomb) bomb_disconnect(n);
     client &c = *clients[n];
     c.state.lastdisc = servmillis;
     const char *scoresaved = "";
@@ -2973,6 +3427,7 @@ void welcomepacket(packetbuf &p, int n)
             //putint(p, sg->minremain*60);
         }
         send_item_list(p); // this includes the flags
+        if(m_bomb) putbombinfo(p);
     }
     savedscore *sc = NULL;
     if(c)
@@ -3036,6 +3491,7 @@ void forcedeath(client *cl)
     sdropflag(cl->clientnum);
     cl->state.state = CS_DEAD;
     cl->state.lastdeath = sg->gamemillis;
+    if(m_bomb) bomb_ondeath(cl);
     cl->state.respawn();
     sendf(-1, 1, "rii", SV_FORCEDEATH, cl->clientnum);
 }
@@ -3055,7 +3511,7 @@ int checktype(int type, client *cl)
                         SV_SETTEAM, SV_TEAMDENY, SV_SERVERMODE, SV_IPLIST,
                         SV_SENDDEMOLIST, SV_SENDDEMO, SV_DEMOPLAYBACK,
                         SV_CLIENT, SV_DEMOCHECKSUM, SV_PAUSEMODE,
-                        SV_VOICESUPPORT, SV_VOICESTATE };
+                        SV_VOICESUPPORT, SV_VOICESTATE, SV_BOMBINFO };
     // only allow edit messages in coop-edit mode
     static int edittypes[] = { SV_EDITENT, SV_EDITXY, SV_EDITARCH, SV_EDITBLOCK, SV_EDITD, SV_EDITE, SV_NEWMAP };
     if(cl)
@@ -3610,6 +4066,7 @@ void process(ENetPacket *packet, int sender, int chan)
                         if((cl->freshgame || numclients() < 2) && !m_demo) spawn = true;
                     }
                     cl->freshgame = false;
+                    if(m_bomb) spawn = bomb_canspawn(cl);
                     if(spawn) sendspawn(cl);
 
                 }
@@ -3724,6 +4181,7 @@ void process(ENetPacket *packet, int sender, int chan)
 
             case SV_TRYSPAWN:
             {
+                if(m_bomb && !bomb_canspawn(cl)) break;
                 int sp = canspawn(cl);
                 if(team_isspect(cl->team) && sp < SP_OK_NUM)
                 {
@@ -3731,6 +4189,12 @@ void process(ENetPacket *packet, int sender, int chan)
                     sp = canspawn(cl);
                 }
                 if( !m_arena && sp < SP_OK_NUM && sg->gamemillis > cl->state.lastspawn + 1000 ) sendspawn(cl);
+                break;
+            }
+
+            case SV_BOMBACTION:
+            {
+                if(m_bomb) bombaction(cl);
                 break;
             }
 
@@ -4677,6 +5141,7 @@ void serverslice(uint timeout)   // main server update, called from cube main lo
             if(f.state == CTFF_INBASE || f.state == CTFF_STOLEN) ktfflagingame = true;
         }
         if(m_ktf && !ktfflagingame) flagaction(rnd(2), FA_RESET, -1); // ktf flag watchdog
+        if(m_bomb) bomb_update();
         if(m_arena) arenacheck();
         else if(m_autospawn) autospawncheck();
         if(scl.afk_limit && sg->mastermode == MM_OPEN && next_afk_check < servmillis && sg->gamemillis > 20 * 1000) check_afk();
@@ -4715,7 +5180,7 @@ void serverslice(uint timeout)   // main server update, called from cube main lo
 
     serverms(sg->smode, numclients(), sg->minremain, sg->smapname, servmillis, serverhost->address, &mnum, &msend, &mrec, &cnum, &csend, &crec, SERVER_PROTOCOL_VERSION, sg->servdesc_current, sg->interm);
 
-    if(sg->autoteam && m_teammode && !m_arena && !sg->interm && servmillis - sg->lastfillup > 5000 && refillteams()) sg->lastfillup = servmillis;
+    if(sg->autoteam && m_teammode && !m_arena && !m_bomb && !sg->interm && servmillis - sg->lastfillup > 5000 && refillteams()) sg->lastfillup = servmillis;
 
     static unsigned int lastThrottleEpoch = 0;
     if(serverhost->bandwidthThrottleEpoch != lastThrottleEpoch)

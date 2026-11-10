@@ -393,6 +393,27 @@ struct sflaginfo
     short x, y;          // flag entity location
 };
 
+struct sbombinfo
+{
+    int state, round, attackerteam;
+    int wins[2];
+    int carrier, site;
+    int dropped;
+    int pos[3];
+    int timerend;
+    int actionactor, actionstart, actionend, actionduration;
+    int roundstart, roundend, nextround, nextsend;
+    int result, reason;
+    int sites[2][2];
+
+    void reset()
+    {
+        memset(this, 0, sizeof(*this));
+        carrier = site = actionactor = -1;
+        sites[0][0] = sites[0][1] = sites[1][0] = sites[1][1] = -1;
+    }
+};
+
 struct clientidentity
 {
     uint ip;
@@ -450,7 +471,8 @@ const char *messagenames[SV_NUM] =
     "SV_MAPIDENT", "SV_DEMOCHECKSUM", "SV_DEMOSIGNATURE",
     "SV_PAUSEMODE",
     "SV_GETVITA", "SV_VITADATA",
-    "SV_VOICEDATA", "SV_VOICEOFF", "SV_VOICESUPPORT", "SV_VOICESTATE"
+    "SV_VOICEDATA", "SV_VOICEOFF", "SV_VOICESUPPORT", "SV_VOICESTATE",
+    "SV_BOMBINFO", "SV_BOMBACTION"
 };
 
 const char *entnames[] =

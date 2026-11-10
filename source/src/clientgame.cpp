@@ -8,6 +8,7 @@ VAR(gamemode, 1, 0, 0);
 VARP(modeacronyms, 0, 1, 1);
 
 flaginfo flaginfos[2];
+bombinfo_s bombinfo;
 entitystats_s clentstats;
 mapdim_s clmapdims;     // min/max X/Y and delta X/Y and min/max Z
 
@@ -214,6 +215,7 @@ void curmodeattr(char *attr)
     if(!strcmp(attr, "team")) { intret(m_teammode); return; }
     else if(!strcmp(attr, "arena")) { intret(m_arena); return; }
     else if(!strcmp(attr, "flag")) { intret(m_flags_); return; }
+    else if(!strcmp(attr, "bomb")) { intret(m_bomb); return; }
     else if(!strcmp(attr, "bot")) { intret(m_botmode); return; }
     intret(0);
 }
@@ -796,6 +798,63 @@ void respawnself()
     }
 }
 
+void bombinfochanged(int oldstate)
+{
+    if(!m_bomb) return;
+    switch(bombinfo.state)
+    {
+        case BOMB_LIVE:
+            if(oldstate == BOMB_WAIT || oldstate == BOMB_END)
+                hudoutf("\f3Round %d - \f1%s attack, %s defend", bombinfo.round, team_basestring(bombinfo.attackerteam), team_basestring(team_opposite(bombinfo.attackerteam)));
+            break;
+        case BOMB_PLANTING:
+            if(bombinfo.actionactor == player1->clientnum) hudoutf("\f3Planting the bomb...");
+            break;
+        case BOMB_PLANTED:
+            if(oldstate == BOMB_PLANTING || oldstate == BOMB_WAIT)
+            {
+                hudoutf("\f1The bomb has been planted!");
+                audiomgr.playsound(S_FLAGSCORE, SP_HIGHEST);
+            }
+            break;
+        case BOMB_DEFUSING:
+            if(oldstate != BOMB_DEFUSING)
+            {
+                hudoutf(bombinfo.actionactor == player1->clientnum ? "\f3Defusing the bomb..." : "\f1The bomb is being defused!");
+                audiomgr.playsound(S_FLAGRETURN, SP_HIGHEST);
+            }
+            break;
+        case BOMB_END:
+            if(oldstate == BOMB_END) break;
+            if(bombinfo.reason == BOMB_REASON_EXPLODED)
+            {
+                particle_splash(PART_FIREBALL, 40, 1200, bombinfo.pos);
+                particle_splash(PART_SMOKE, 30, 1500, bombinfo.pos);
+                adddynlight(NULL, bombinfo.pos, 24, 800, 500, 255, 210, 120);
+                audiomgr.playsound(S_FEXPLODE, SP_HIGHEST);
+                hudoutf("\f1The bomb exploded - attackers win the round");
+            }
+            else if(bombinfo.reason == BOMB_REASON_DEFUSED)
+            {
+                audiomgr.playsound(S_FLAGRETURN, SP_HIGHEST);
+                hudoutf("\f3The bomb was defused - defenders win the round");
+            }
+            else if(bombinfo.reason == BOMB_REASON_TIME)
+                hudoutf("\f3Time ran out - defenders win the round");
+            else if(bombinfo.reason == BOMB_REASON_ELIMINATED)
+                hudoutf(bombinfo.result == BOMB_RESULT_ATTACKERS ? "\f1Attackers win the round" : "\f3Defenders win the round");
+            else
+                hudoutf("\f3Round over");
+            break;
+    }
+}
+
+void bombaction()
+{
+    if(m_bomb) addmsg(SV_BOMBACTION, "r");
+}
+COMMAND(bombaction, "");
+
 inline const char * spawn_message()
 {
     if (spawnpermission == SP_WRONGMAP)
@@ -830,6 +889,11 @@ bool tryrespawn()
         }
         else
         {
+            if(m_bomb)
+            {
+                hudeditf(HUDMSG_TIMER, "\f3waiting for the next round...");
+                return false;
+            }
             int respawnmillis = player1->lastdeath + (m_arena ? 0 : (m_flags_ ? 5000 : 2000));
             if(lastmillis>respawnmillis)
             {
@@ -1160,6 +1224,8 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     canceldownloads = false;
     copystring(clientmap, name);
 
+    if(m_bomb) bombinfo.reset();
+
     if(norespawn) return;
 
     sendmapidenttoserver = true;
@@ -1167,7 +1233,7 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     else kickallbots();
     showmipstats = false;
     clearbounceents();
-    preparectf(!m_flags_);
+    preparectf(!(m_flags_ || m_bomb));
     suicided = -1;
     spawncycle = -1;
     lasthit = 0;
@@ -1564,7 +1630,7 @@ void clearvote() { DELETEP(curvote); DELETEP(calledvote); }
 const char *modestrings[] =
 {
     "tdm", "coop", "dm", "lms", "ts", "ctf", "pf", "btdm", "bdm", "lss",
-    "osok", "tosok", "bosok", "htf", "tktf", "ktf", "tpf", "tlss", "bpf", "blss", "btsurv", "btosok"
+    "osok", "tosok", "bosok", "htf", "tktf", "ktf", "tpf", "tlss", "bpf", "blss", "btsurv", "btosok", "bomb"
 };
 
 void setnext(char *mode, char *map)

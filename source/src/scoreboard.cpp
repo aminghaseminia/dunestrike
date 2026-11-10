@@ -312,7 +312,9 @@ void renderscores(void *menu, bool init)
             renderteamscore(&teamscores[sort ^ i]);
             renderdiscscores(sort ^ i);
         }
-        winner = m_flags_ ?
+        winner = m_bomb ?
+            (bombinfo.wins[0] > bombinfo.wins[1] ? TEAM_CLA : bombinfo.wins[1] > bombinfo.wins[0] ? TEAM_RVSF : -1) :
+            m_flags_ ?
             (teamscores[sort].flagscore > teamscores[team_opposite(sort)].flagscore ? sort : -1) :
             (teamscores[sort].frags > teamscores[team_opposite(sort)].frags ? sort : -1);
 
@@ -346,6 +348,7 @@ void renderscores(void *menu, bool init)
         bool fldrprefix = !strncmp(getclientmap(), "maps/", strlen("maps/"));
         formatstring(modeline)("\"%s\" on map %s", modestr(gamemode, modeacronyms > 0), fldrprefix ? getclientmap()+strlen("maps/") : getclientmap());
     }
+    if(m_bomb && getclientmap()[0]) concatformatstring(modeline, ", \f3bomb \f1%d\f7-\f1%d", bombinfo.wins[0], bombinfo.wins[1]);
 
     extern int minutesremaining, gametimedisplay;
     extern string gtime;

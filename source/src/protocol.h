@@ -7,7 +7,7 @@
 #define CUBE_SERVINFO_PORT(serverport) (serverport+1)
 #define CUBE_SERVINFO_TO_SERV_PORT(servinfoport) (servinfoport-1)
 #define CLIENTIPCENSOR 12               // blank out the last 12 bits of client's IPs before telling them to others (compromise between "16" from AC 0.9x and "8" from AC 1.1)
-#define PROTOCOL_VERSION 1300           // bump when protocol changes (use negative numbers for mods!)
+#define PROTOCOL_VERSION 1301           // bump when protocol changes (use negative numbers for mods!)
 #define DEMO_VERSION 2                  // bump when demo format changes
 #define DEMO_MAGIC "DUNESTRIKE_DEMO"
 #define DEMO_MINTIME 10000              // don't keep demo recordings with less than 10 seconds
@@ -52,6 +52,7 @@ enum
     SV_PAUSEMODE,
     SV_GETVITA, SV_VITADATA,
     SV_VOICEDATA, SV_VOICEOFF, SV_VOICESUPPORT, SV_VOICESTATE,
+    SV_BOMBINFO, SV_BOMBACTION,
     SV_NUM
 };
 
@@ -128,6 +129,7 @@ enum
     GMODE_BOTLSS,
     GMODE_BOTTEAMSURVIVOR,              // 20
     GMODE_BOTTEAMONESHOTONKILL,
+    GMODE_BOMB,                         // 22
     GMODE_NUM
 };
 
@@ -155,17 +157,18 @@ enum
     GMMASK_BOTLSS               = 1 << GMODE_BOTLSS,
     GMMASK_BOTTEAMSURVIVOR      = 1 << GMODE_BOTTEAMSURVIVOR,              // 20
     GMMASK_BOTTEAMONESHOTONKILL = 1 << GMODE_BOTTEAMONESHOTONKILL,
+    GMMASK_BOMB                 = 1 << GMODE_BOMB,                        // 22
     GMMASK__ALL       = (1 << GMODE_NUM) - 1,
     GMMASK__FLAGS     = GMMASK_CTF | GMMASK_HUNTTHEFLAG | GMMASK_KEEPTHEFLAG | GMMASK_TEAMKEEPTHEFLAG,
-    GMMASK__FLAGENTS  = GMMASK_CTF | GMMASK_KEEPTHEFLAG | GMMASK_TEAMKEEPTHEFLAG,
+    GMMASK__FLAGENTS  = GMMASK_CTF | GMMASK_KEEPTHEFLAG | GMMASK_TEAMKEEPTHEFLAG | GMMASK_BOMB,
     GMMASK__BOT       = GMMASK_BOTDEATHMATCH | GMMASK_BOTLSS | GMMASK_BOTONESHOTONEKILL | GMMASK_BOTPISTOLFRENZY | GMMASK_BOTTEAMDEATHMATCH | GMMASK_BOTTEAMONESHOTONKILL | GMMASK_BOTTEAMSURVIVOR,
     GMMASK__MP        = GMMASK_TEAMDEATHMATCH | GMMASK_COOPEDIT | GMMASK_DEATHMATCH | GMMASK_SURVIVOR | GMMASK_TEAMSURVIVOR | GMMASK_CTF | GMMASK_PISTOLFRENZY | GMMASK_LASTSWISSSTANDING
-                      | GMMASK_ONESHOTONEKILL | GMMASK_TEAMONESHOTONEKILL | GMMASK_HUNTTHEFLAG | GMMASK_TEAMKEEPTHEFLAG | GMMASK_KEEPTHEFLAG | GMMASK_TEAMPF | GMMASK_TEAMLSS,
+                      | GMMASK_ONESHOTONEKILL | GMMASK_TEAMONESHOTONEKILL | GMMASK_HUNTTHEFLAG | GMMASK_TEAMKEEPTHEFLAG | GMMASK_KEEPTHEFLAG | GMMASK_TEAMPF | GMMASK_TEAMLSS | GMMASK_BOMB,
     GMMASK__MPNOCOOP  = GMMASK__MP & ~GMMASK_COOPEDIT,
     GMMASK__TEAM      = GMMASK_BOTTEAMDEATHMATCH | GMMASK_BOTTEAMONESHOTONKILL | GMMASK_BOTTEAMSURVIVOR | GMMASK_TEAMDEATHMATCH | GMMASK_TEAMSURVIVOR | GMMASK_CTF
-                      | GMMASK_TEAMONESHOTONEKILL | GMMASK_HUNTTHEFLAG | GMMASK_TEAMKEEPTHEFLAG | GMMASK_TEAMPF | GMMASK_TEAMLSS,
+                      | GMMASK_TEAMONESHOTONEKILL | GMMASK_HUNTTHEFLAG | GMMASK_TEAMKEEPTHEFLAG | GMMASK_TEAMPF | GMMASK_TEAMLSS | GMMASK_BOMB,
     GMMASK__TEAMSPAWN = GMMASK_BOTTEAMDEATHMATCH | GMMASK_BOTTEAMONESHOTONKILL | GMMASK_BOTTEAMSURVIVOR | GMMASK_TEAMDEATHMATCH | GMMASK_TEAMSURVIVOR | GMMASK_CTF
-                      | GMMASK_TEAMONESHOTONEKILL | GMMASK_HUNTTHEFLAG | GMMASK_TEAMPF | GMMASK_TEAMLSS,
+                      | GMMASK_TEAMONESHOTONEKILL | GMMASK_HUNTTHEFLAG | GMMASK_TEAMPF | GMMASK_TEAMLSS | GMMASK_BOMB,
     GMMASK__FFA       = GMMASK_BOTDEATHMATCH | GMMASK_BOTLSS | GMMASK_BOTONESHOTONEKILL | GMMASK_BOTPISTOLFRENZY | GMMASK_COOPEDIT | GMMASK_DEATHMATCH | GMMASK_SURVIVOR
                       | GMMASK_PISTOLFRENZY | GMMASK_LASTSWISSSTANDING | GMMASK_ONESHOTONEKILL | GMMASK_KEEPTHEFLAG,
     GMMASK__FFASPAWN  = GMMASK_BOTDEATHMATCH | GMMASK_BOTLSS | GMMASK_BOTONESHOTONEKILL | GMMASK_BOTPISTOLFRENZY | GMMASK_COOPEDIT | GMMASK_DEATHMATCH | GMMASK_SURVIVOR
@@ -179,6 +182,12 @@ enum
 #define m_osok        ((gamemode>=10 && gamemode<=12) || gamemode==21)
 #define m_htf         (gamemode==13)
 #define m_ktf         (gamemode==14 || gamemode==15)
+#define m_bomb        (gamemode==GMODE_BOMB)
+
+// bomb defusal round states
+enum { BOMB_WAIT = 0, BOMB_LIVE, BOMB_PLANTING, BOMB_PLANTED, BOMB_DEFUSING, BOMB_END };
+enum { BOMB_RESULT_NONE = 0, BOMB_RESULT_ATTACKERS, BOMB_RESULT_DEFENDERS };
+enum { BOMB_REASON_NONE = 0, BOMB_REASON_EXPLODED, BOMB_REASON_DEFUSED, BOMB_REASON_TIME, BOMB_REASON_ELIMINATED };
 
 #define m_noitems     (m_lms || m_osok)
 #define m_noitemsnade (m_lss)
@@ -187,7 +196,7 @@ enum
 #define m_noguns      (m_nopistol && m_noprimary)
 #define m_arena       (m_lms || m_lss || m_osok)
 #define m_autospawn   (gamemode == 0 || gamemode == 2 || gamemode == 6 || gamemode == 13 || gamemode == 16)
-#define m_teammode    (gamemode==0 || gamemode==4 || gamemode==5 || gamemode==7 || gamemode==11 || gamemode==13 || gamemode==14 || gamemode==16 || gamemode==17 || gamemode==20 || gamemode==21)
+#define m_teammode    (gamemode==0 || gamemode==4 || gamemode==5 || gamemode==7 || gamemode==11 || gamemode==13 || gamemode==14 || gamemode==16 || gamemode==17 || gamemode==20 || gamemode==21 || m_bomb)
 #define m_tarena      (m_arena && m_teammode)
 #define m_botmode     (gamemode==7 || gamemode == 8 || gamemode==12 || (gamemode>=18 && gamemode<=21))
 #define m_valid(mode) (((mode)>=0 && (mode)<GMODE_NUM) || (mode) == -1)

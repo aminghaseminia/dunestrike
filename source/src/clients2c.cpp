@@ -1412,6 +1412,34 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 break;
             }
 
+            case SV_BOMBINFO:
+            {
+                int oldstate = bombinfo.state;
+                bombinfo.state = getint(p);
+                bombinfo.round = getint(p);
+                bombinfo.attackerteam = getint(p);
+                bombinfo.wins[0] = getint(p);
+                bombinfo.wins[1] = getint(p);
+                bombinfo.carrier = getint(p);
+                bombinfo.site = getint(p);
+                bombinfo.dropped = getint(p);
+                bombinfo.pos.x = getint(p);
+                bombinfo.pos.y = getint(p);
+                bombinfo.pos.z = getint(p);
+                bombinfo.timeremaining = getint(p);
+                bombinfo.actionactor = getint(p);
+                bombinfo.actionremaining = getint(p);
+                bombinfo.actionduration = getint(p);
+                bombinfo.roundremaining = getint(p);
+                bombinfo.result = getint(p);
+                bombinfo.reason = getint(p);
+                loopi(2) loopj(2) bombinfo.sites[i].v[j] = getint(p);
+                bombinfo.sites[0].z = bombinfo.sites[1].z = 0;
+                bombinfo.updatetime = lastmillis;
+                if(oldstate != bombinfo.state) bombinfochanged(oldstate);
+                break;
+            }
+
             default:
                 neterr("type");
                 return;
