@@ -429,6 +429,10 @@ void renderaboveheadicon(playerent *p)
     glPopMatrix();
 }
 
+// shows who is carrying the bomb in bomb defusal mode
+bool bombhudmarker = false;
+float bombhudx = 0, bombhudy = 0;
+
 void rendercursor(int x, int y, int w)
 {
     color c(1, 1, 1, (sinf(lastmillis/200.0f)+1.0f)/2.0f);
@@ -1120,6 +1124,35 @@ void gl_drawframe(int w, int h, float changelod, float curfps, int elapsed)
     startmodelbatches();
     renderclients();
     endmodelbatches();
+
+    // bomb defusal: project the bomb carrier to the screen so the HUD can mark them
+    bombhudmarker = false;
+    if(m_bomb && bombinfo.carrier >= 0 && players.inrange(bombinfo.carrier))
+    {
+        playerent *carrier = players[bombinfo.carrier];
+        if(carrier && carrier->state != CS_SPECTATE && carrier->state != CS_SPAWNING && !OUTBORD(carrier->o.x, carrier->o.y))
+        {
+            GLfloat mv[16], pr[16];
+            GLint vp[4];
+            glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+            glGetFloatv(GL_PROJECTION_MATRIX, pr);
+            glGetIntegerv(GL_VIEWPORT, vp);
+            float x = carrier->o.x, y = carrier->o.y, z = carrier->o.z + carrier->aboveeye + 0.9f;
+            float ex = mv[0]*x + mv[4]*y + mv[8]*z + mv[12],
+                  ey = mv[1]*x + mv[5]*y + mv[9]*z + mv[13],
+                  ez = mv[2]*x + mv[6]*y + mv[10]*z + mv[14],
+                  ew = mv[3]*x + mv[7]*y + mv[11]*z + mv[15];
+            float cx = pr[0]*ex + pr[4]*ey + pr[8]*ez + pr[12]*ew,
+                  cy = pr[1]*ex + pr[5]*ey + pr[9]*ez + pr[13]*ew,
+                  cw = pr[3]*ex + pr[7]*ey + pr[11]*ez + pr[15]*ew;
+            if(cw > 0.01f)
+            {
+                bombhudmarker = true;
+                bombhudx = ((cx/cw)*0.5f + 0.5f) * vp[2] + vp[0];
+                bombhudy = (0.5f - (cy/cw)*0.5f) * vp[3] + vp[1];
+            }
+        }
+    }
 
     startmodelbatches();
     renderentities();

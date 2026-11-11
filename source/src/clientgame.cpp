@@ -662,6 +662,26 @@ void resetsleep(bool force)
 
 COMMANDF(resetsleeps, "", (void) { resetsleep(true); });
 
+// let the bomb carrier know when they are standing on the active site
+static void bombcheck()
+{
+    static bool lastatsite = false;
+    if(!m_bomb || bombinfo.state != BOMB_LIVE || bombinfo.carrier != player1->clientnum)
+    {
+        lastatsite = false;
+        return;
+    }
+    int site = 1 - bombinfo.attackerteam;
+    bool atsite = false;
+    if(site >= 0 && site < 2 && bombinfo.sites[site].x >= 0)
+    {
+        float dx = player1->o.x - bombinfo.sites[site].x, dy = player1->o.y - bombinfo.sites[site].y;
+        atsite = dx*dx + dy*dy <= 9.0f; // matches the server's default bomb_siteradius
+    }
+    if(atsite && !lastatsite) hudoutf("\f1You are at the bomb site - press F or right-click to plant");
+    lastatsite = atsite;
+}
+
 void updateworld(int curtime, int lastmillis)        // main game update loop
 {
     // process command sleeps
@@ -689,6 +709,7 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
     moveotherplayers();
     gets2c();
     showrespawntimer();
+    bombcheck();
 
     // Added by Rick: let bots think
     if(m_botmode) BotManager.Think();
@@ -796,6 +817,21 @@ void respawnself()
         player1->weaponswitch(player1->primweap);
         player1->weaponchanging -= player1->weapons[player1->gunselect]->weaponchangetime/2; // 2011jan16:ft: for a little no-shoot after spawn
     }
+}
+
+void bombcarrierchanged(int oldcarrier)
+{
+    if(!m_bomb || bombinfo.state != BOMB_LIVE) return;
+    bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
+    if(bombinfo.carrier == player1->clientnum)
+        hudoutf("\f1You have the bomb - plant it at the marked site");
+    else if(bombinfo.carrier >= 0 && attacker)
+    {
+        playerent *newcarrier = getclient(bombinfo.carrier);
+        if(newcarrier) hudoutf("\f3%s has the bomb", colorname(newcarrier));
+    }
+    else if(bombinfo.carrier < 0 && oldcarrier >= 0 && bombinfo.dropped && attacker)
+        hudoutf("\f1The bomb has been dropped!");
 }
 
 void bombinfochanged(int oldstate)

@@ -1416,6 +1416,7 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
             case SV_BOMBINFO:
             {
                 int oldstate = bombinfo.state;
+                int oldcarrier = bombinfo.carrier;
                 bombinfo.state = getint(p);
                 bombinfo.round = getint(p);
                 bombinfo.attackerteam = getint(p);
@@ -1438,6 +1439,7 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 bombinfo.sites[0].z = bombinfo.sites[1].z = 0;
                 bombinfo.updatetime = lastmillis;
                 if(oldstate != bombinfo.state) bombinfochanged(oldstate);
+                if(oldcarrier != bombinfo.carrier) bombcarrierchanged(oldcarrier);
                 break;
             }
 

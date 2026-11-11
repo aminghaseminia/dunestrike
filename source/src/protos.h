@@ -402,6 +402,8 @@ extern void clearminimap();
 extern void resetzones();
 extern void rendercursor(int x, int y, int w);
 extern void renderaboveheadicon(playerent *p);
+extern bool bombhudmarker;
+extern float bombhudx, bombhudy;
 extern void drawscope(bool preload = false);
 extern float dynfov();
 extern int fog;
@@ -610,6 +612,7 @@ struct bombinfo_s
 };
 extern bombinfo_s bombinfo;
 extern void bombinfochanged(int oldstate);
+extern void bombcarrierchanged(int oldcarrier);
 extern void flagpickup(int fln);
 extern void tryflagdrop(bool manual = false);
 extern void flagreturn(int fln);

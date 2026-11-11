@@ -562,6 +562,26 @@ void drawradar_showmap(playerent *p, int w, int h)
             }
         }
     }
+    if(m_bomb)
+    {
+        glColor4f(1.0f, 1.0f, 1.0f, (sinf(lastmillis / 100.0f) + 1.0f) / 2.0f);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        bool attacker = player1->team == TEAM_SPECT || (team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam);
+        int activesite = 1 - bombinfo.attackerteam;
+        if(attacker && activesite >= 0 && activesite < 2 && bombinfo.sites[activesite].x >= 0
+           && !OUTBORD(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y))
+        {
+            vec pos = vec(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y, 0).sub(mdd).mul(coordtrans);
+            drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+        }
+        if(bombinfo.pos.x >= 0 && !OUTBORD(bombinfo.pos.x, bombinfo.pos.y)
+           && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
+               || (bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)))
+        {
+            vec pos = vec(bombinfo.pos).sub(mdd).mul(coordtrans);
+            drawradarent(pos.x, pos.y, 0, 2, 3, iconsize, true); // bomb
+        }
+    }
     glEnable(GL_BLEND);
     glPopMatrix();
 }
@@ -670,6 +690,32 @@ void drawradar_vicinity(playerent *p, int w, int h)
             }
         }
     }
+    if(m_bomb)
+    {
+        glColor4f(1.0f, 1.0f, 1.0f, (sinf(lastmillis / 100.0f) + 1.0f) / 2.0f);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        bool attacker = player1->team == TEAM_SPECT || (team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam);
+        int activesite = 1 - bombinfo.attackerteam;
+        if(attacker && activesite >= 0 && activesite < 2 && bombinfo.sites[activesite].x >= 0)
+        {
+            vec pos = vec(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y, 0).sub(d->o);
+            if(pos.sqrxy() < d2s)
+            {
+                pos.mul(scaled);
+                drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+            }
+        }
+        if(bombinfo.pos.x >= 0 && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
+            || (bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)))
+        {
+            vec pos = vec(bombinfo.pos).sub(d->o);
+            if(pos.sqrxy() < d2s)
+            {
+                pos.mul(scaled);
+                drawradarent(pos.x, pos.y, 0, 2, 3, iconsize, true); // bomb
+            }
+        }
+    }
     glEnable(GL_BLEND);
     glPopMatrix();
     // eye candy:
@@ -765,6 +811,22 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     glLoadIdentity();
     glOrtho(0, VIRTW, VIRTH, 0, -1, 1);
     glEnable(GL_BLEND);
+
+    if(bombhudmarker)
+    { // bomb defusal: icon above the player carrying the bomb
+        static Texture *bombtex = NULL;
+        if(!bombtex) bombtex = textureload("packages/misc/items.png", 3);
+        if(bombtex)
+        {
+            float s = VIRTH/12.0f;
+            float x = bombhudx * VIRTW / w - s/2, y = bombhudy * VIRTH / h - s/2;
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_TEXTURE_2D);
+            glColor3f(1.0f, 1.0f, 1.0f);
+            drawicon(bombtex, x, y, s, 3, 1, 1/4.0f); // grenade icon from items.png
+        }
+    }
+
 
     if(underwater)
     {
@@ -954,7 +1016,14 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
 
         int elapsed = lastmillis - bombinfo.updatetime;
         string timerline;
-        if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
+        if(bombinfo.state == BOMB_WAIT)
+        {
+            const char *waitmsg = bombinfo.sites[0].x < 0 || bombinfo.sites[1].x < 0 ?
+                "\f3this map has no CTF flag sites - bomb defusal cannot start" :
+                "\f3waiting for at least one player on each team";
+            draw_text(waitmsg, (VIRTW*2 - text_width(waitmsg))/2, y + 2*FONTH, 255, 255, 255);
+        }
+        else if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
         {
             int remaining = max(0, bombinfo.timeremaining - elapsed);
             formatstring(timerline)("\f1BOMB %02d:%02d", remaining/60000, (remaining/1000)%60);
@@ -978,6 +1047,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         }
 
         const char *hint = NULL;
+        bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
         if(bombinfo.state == BOMB_LIVE && bombinfo.carrier == player1->clientnum)
         {
             bool atsite = false;
@@ -987,7 +1057,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 float dx = player1->o.x - bombinfo.sites[activesite].x, dy = player1->o.y - bombinfo.sites[activesite].y;
                 if(dx*dx + dy*dy <= 9.0f) atsite = true;
             }
-            hint = atsite ? "\f1press F or right-click to plant the bomb" : "\f3you have the bomb - go to the marked site";
+            hint = atsite ? "\f1press F or right-click to plant the bomb" : "\f1YOU HAVE THE BOMB - go to the marked site";
         }
         else if(bombinfo.state == BOMB_PLANTED && team_isactive(player1->team) && team_base(player1->team) != bombinfo.attackerteam)
         {
@@ -996,6 +1066,16 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         else if(bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)
             hint = "\f3the bomb is on the ground";
         if(hint) draw_text(hint, (VIRTW*2 - text_width(hint))/2, y + 4*FONTH, 255, 255, 255);
+
+        if(bombinfo.state == BOMB_LIVE && bombinfo.carrier >= 0 && bombinfo.carrier != player1->clientnum && (attacker || player1->team == TEAM_SPECT))
+        {
+            playerent *carrier = getclient(bombinfo.carrier);
+            if(carrier)
+            {
+                defformatstring(bombline)("\f3bomb: \f1%s", colorname(carrier));
+                draw_text(bombline, (VIRTW*2 - text_width(bombline))/2, y + 5*FONTH, 255, 255, 255);
+            }
+        }
     }
 
     if(hidevote < 2 && multiplayer(NULL))

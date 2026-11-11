@@ -1827,7 +1827,11 @@ void bomb_startround()
     if(!m_bomb || sg->interm || sg->forceintermission) return;
     if(sg->bomb.sites[0][0] < 0 || sg->bomb.sites[1][0] < 0)
     {
-        sendservmsg("\f3Bomb mode needs a map with two CTF flag entities");
+        if(sg->gamemillis - sg->bomb.lastnotify > 10000)
+        {
+            sendservmsg("\f3Bomb mode needs a map with two CTF flag entities");
+            sg->bomb.lastnotify = sg->gamemillis;
+        }
         sg->bomb.state = BOMB_WAIT;
         sg->bomb.nextround = sg->gamemillis + 10000;
         return;
@@ -1843,6 +1847,11 @@ void bomb_startround()
     }
     if(!attackers || !defenders)
     {
+        if(sg->gamemillis - sg->bomb.lastnotify > 10000)
+        {
+            sendservmsg("\f3Bomb defusal needs at least one player on each team");
+            sg->bomb.lastnotify = sg->gamemillis;
+        }
         sg->bomb.state = BOMB_WAIT;
         sg->bomb.nextround = sg->gamemillis + 5000;
         return;
@@ -1907,6 +1916,11 @@ void bomb_endround(int winner, int reason)
         case BOMB_REASON_EXPLODED: text = "\f3The bomb exploded - attackers win the round"; break;
         case BOMB_REASON_DEFUSED: text = "\f3The bomb was defused - defenders win the round"; break;
         case BOMB_REASON_TIME: text = "\f3Time ran out - defenders win the round"; break;
+        case BOMB_REASON_ELIMINATED:
+            text = b.result == BOMB_RESULT_ATTACKERS ?
+                "\f1All defenders eliminated - attackers win the round" :
+                "\f3All attackers eliminated - defenders win the round";
+            break;
         default: text = "\f3Round over"; break;
     }
     sendservmsg(text);
