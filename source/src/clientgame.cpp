@@ -850,14 +850,14 @@ void bombinfochanged(int oldstate)
             if(oldstate == BOMB_PLANTING || oldstate == BOMB_WAIT)
             {
                 hudoutf("\f1The bomb has been planted!");
-                audiomgr.playsound(S_FLAGSCORE, SP_HIGHEST);
+                audiomgr.playsound(S_FA_BOMBPLANTED, SP_HIGHEST);
             }
             break;
         case BOMB_DEFUSING:
             if(oldstate != BOMB_DEFUSING)
             {
                 hudoutf(bombinfo.actionactor == player1->clientnum ? "\f3Defusing the bomb..." : "\f1The bomb is being defused!");
-                audiomgr.playsound(S_FLAGRETURN, SP_HIGHEST);
+                audiomgr.playsound(S_FA_DEFUSING, SP_HIGHEST);
             }
             break;
         case BOMB_END:
@@ -872,7 +872,7 @@ void bombinfochanged(int oldstate)
             }
             else if(bombinfo.reason == BOMB_REASON_DEFUSED)
             {
-                audiomgr.playsound(S_FLAGRETURN, SP_HIGHEST);
+                audiomgr.playsound(S_FA_DEFUSED, SP_HIGHEST);
                 hudoutf("\f3The bomb was defused - defenders win the round");
             }
             else if(bombinfo.reason == BOMB_REASON_TIME)

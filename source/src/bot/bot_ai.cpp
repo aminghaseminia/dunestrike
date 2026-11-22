@@ -191,6 +191,15 @@ bool CBot::FindEnemy(void)
 
             m_iShootDelay = lastmillis + int(RandomFloat(flMinShootDelay,
                                        flMaxShootDelay) * 1000.0f);
+
+            // Persian call-out: "enemy spotted". Rate-limited so a whole team
+            // of bots does not shout at the same time.
+            static int lastspottedvoice = -10000;
+            if (lastmillis - lastspottedvoice > 4000)
+            {
+                lastspottedvoice = lastmillis;
+                audiomgr.playsound(S_FA_SPOTTED, m_pMyEnt, SP_NORMAL);
+            }
         }
 
         if ((m_pMyEnt->enemy != pNewEnemy) && m_pMyEnt->enemy)

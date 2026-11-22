@@ -689,6 +689,10 @@ soundcfgitem soundcfg[S_NULL] =
     { "misc/pickup_helmet",     "Helmet pickup",            0, 0,  0, S_ITEMHELMET,             C(PICKUP)        }, // 99
     { "player/heartbeat",       "Heartbeat",                0, 0,  0, S_HEARTBEAT,              C(OWNPAIN)       }, // 100
     { "ktf/flagscore",          "KTF score",                0, 0,  0, S_KTFSCORE,               C(OTHER)         }, // 101
-    { "misc/camera",            "Screenshot",               0, 0,  0, S_CAMERA,                 C(OTHER)         }  // 102
+    { "misc/camera",            "Screenshot",               0, 0,  0, S_CAMERA,                 C(OTHER)         }, // 102
+    { "voicecom/fa_spotted",      "Persian: enemy spotted",  0, 0,  0, S_FA_SPOTTED,             C(VOICECOM)|C(OTHER) },
+    { "voicecom/fa_bomb_planted", "Persian: bomb planted",   0, 0,  0, S_FA_BOMBPLANTED,         C(VOICECOM)|C(OTHER) },
+    { "voicecom/fa_defusing",     "Persian: defusing",       0, 0,  0, S_FA_DEFUSING,            C(VOICECOM)|C(OTHER) },
+    { "voicecom/fa_defused",      "Persian: defused",        0, 0,  0, S_FA_DEFUSED,             C(VOICECOM)|C(OTHER) }
 };
 #undef C

@@ -794,6 +794,102 @@ const char *ghoststrings[] =
   "none", "deathcam", "chase 1st", "chase 3rd [O]", "chase 3rd [A]", "fly", "overview", ""
 };
 
+// ---------------------------------------------------------------------------
+// mode & objective HUD
+//
+// Small two-line panel at the top of the screen: the game mode in plain
+// English and what the local player is supposed to do right now. Labels are
+// kept to one or two words so they stay readable in the bitmap font.
+// ---------------------------------------------------------------------------
+
+VARP(hidemodeinfo, 0, 0, 1);
+VARP(hudmodetest, 0, 0, 1);
+
+static const char *hudmodename(int mode)
+{
+    switch(mode)
+    {
+        case GMODE_TEAMDEATHMATCH:
+        case GMODE_BOTTEAMDEATHMATCH:    return "TEAM DEATHMATCH";
+        case GMODE_DEATHMATCH:
+        case GMODE_BOTDEATHMATCH:        return "DEATHMATCH";
+        case GMODE_CTF:                  return "CAPTURE FLAG";
+        case GMODE_KEEPTHEFLAG:
+        case GMODE_TEAMKEEPTHEFLAG:      return "KEEP FLAG";
+        case GMODE_KEEPTHEFLAGCONTINUE:  return "KEEP FLAG+";
+        case GMODE_HUNTTHEFLAG:          return "HUNT FLAG";
+        case GMODE_LASTSWISSSTANDING:
+        case GMODE_TEAMLSS:
+        case GMODE_BOTLSS:               return "KNIFE ONLY";
+        case GMODE_ONESHOTONEKILL:
+        case GMODE_TEAMONESHOTONEKILL:
+        case GMODE_BOTONESHOTONEKILL:
+        case GMODE_BOTTEAMONESHOTONKILL: return "ONE SHOT";
+        case GMODE_PISTOLFRENZY:
+        case GMODE_TEAMPF:
+        case GMODE_BOTPISTOLFRENZY:      return "PISTOL ONLY";
+        case GMODE_SURVIVOR:
+        case GMODE_TEAMSURVIVOR:
+        case GMODE_BOTTEAMSURVIVOR:      return "SURVIVOR";
+        case GMODE_BOMB:                 return "BOMB DEFUSAL";
+        case GMODE_COOPEDIT:             return "COOP EDIT";
+        default:                         return acronymmodestr(mode);
+    }
+}
+
+static const char *hudmodeobjective()
+{
+    if(m_bomb)
+    {
+        bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
+        switch(bombinfo.state)
+        {
+            case BOMB_PLANTING: return attacker ? "PLANTING" : "STOP THE PLANT";
+            case BOMB_PLANTED:  return attacker ? "PROTECT BOMB" : "DEFUSE BOMB";
+            case BOMB_DEFUSING: return attacker ? "PROTECT BOMB" : "DEFUSING";
+            case BOMB_END:      return "ROUND OVER";
+            default:            return attacker ? "PLANT BOMB" : "DEFEND SITES";
+        }
+    }
+    if(m_ctf)    return "STEAL FLAG";
+    if(m_htf)    return "HUNT FLAG";
+    if(m_ktf)    return "HOLD FLAG";
+    if(m_lss)    return "LAST ALIVE";
+    if(m_osok)   return "ONE SHOT";
+    if(m_pistol) return "PISTOL ONLY";
+    if(m_lms)    return "LAST ALIVE";
+    if(m_coop)   return "BUILD MAP";
+    return "MOST KILLS";
+}
+
+void drawmodeinfo()
+{
+    if(hidemodeinfo || (!hudmodetest && !multiplayer(NULL) && !m_botmode)) return;
+
+    const char *name = hudmodename(gamemode);
+    const char *obj = hudmodeobjective();
+    int namew = text_width(name), objw = text_width(obj);
+    int x1 = (VIRTW * 2 - namew) / 2, x2 = (VIRTW * 2 - objw) / 2;
+    int y1 = FONTH * 3 / 2, y2 = y1 + FONTH + 2;
+
+    // darken the strip behind the labels so they stay readable on bright maps
+    int bx1 = min(x1, x2) - FONTH, bx2 = max(x1 + namew, x2 + objw) + FONTH;
+    int by1 = y1 - FONTH / 2, by2 = y2 + FONTH + FONTH / 4;
+    glDisable(GL_TEXTURE_2D);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0, 0, 0, 0.45f);
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(bx1, by1); glVertex2f(bx2, by1); glVertex2f(bx1, by2); glVertex2f(bx2, by2);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
+
+    // drop shadow first, then the text itself
+    draw_text(name, x1 + 2, y1 + 2, 0, 0, 0, 190);
+    draw_text(obj,  x2 + 2, y2 + 2, 0, 0, 0, 190);
+    draw_text(name, x1, y1, 255, 255, 255, 235);
+    draw_text(obj,  x2, y2, 210, 230, 180, 235);
+}
+
 void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwater, int elapsed)
 {
     if(blankouthud > 0) { blankouthud -= elapsed; return; }
@@ -908,6 +1004,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     }
     glLoadIdentity();
     glOrtho(0, VIRTW*2, VIRTH*2, 0, -1, 1);
+    drawmodeinfo();
     extern void r_accuracy(int h);
     extern void *scoremenu;
     extern gmenu *curmenu;
