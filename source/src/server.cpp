@@ -1738,9 +1738,16 @@ void arenacheck()
 // bomb defusal mode
 
 void serverdamage(client *target, client *actor, int damage, int gun, bool gib, const vec &hitpush = vec(0, 0, 0), int zone = HITZONE_TORSO);
+bool updateclientteam(int cln, int newteam, int ftr);
 
 SERVPAR(bomb_roundlimit, 1, 8, 30, "DNumber of rounds needed to win a bomb defusal match");
+SERVPAR(bomb_halftime, 0, 0, 30, "DHalftime round count (0 = auto based on bomb_roundlimit)");
 SERVPAR(bomb_rounddelay, 1, 5, 30, "DSeconds between bomb defusal rounds");
+
+static inline int bomb_get_halftimerounds()
+{
+    return bomb_halftime > 0 ? bomb_halftime : (bomb_roundlimit > 1 ? bomb_roundlimit - 1 : 1);
+}
 SERVPAR(bomb_startdelay, 0, 3, 30, "DSeconds before the first bomb defusal round starts");
 SERVPAR(bomb_roundtime, 30, 90, 900, "DSeconds in a bomb defusal round before defenders win");
 SERVPAR(bomb_planttime, 1, 3, 30, "DSeconds needed to plant the bomb");
@@ -1870,7 +1877,7 @@ void bomb_startround()
     sbombinfo &b = sg->bomb;
     b.round++;
     b.state = BOMB_LIVE;
-    b.attackerteam = (b.round & 1) ? TEAM_CLA : TEAM_RVSF;
+    b.attackerteam = TEAM_CLA; // CLA always attacks from T-spawn; sides swap at halftime
     b.carrier = b.site = b.actionactor = -1;
     b.dropped = 0;
     b.timerend = b.actionstart = b.actionend = b.actionduration = 0;
@@ -1902,9 +1909,11 @@ void bomb_startround()
     }
     b.carrier = carrier;
     sendbombinfo();
-    defformatstring(msg)("\f3Round %d: \f1%s attack\f3, \f1%s defend", b.round, team_basestring(b.attackerteam), team_basestring(team_opposite(b.attackerteam)));
+    int halftimerounds = bomb_get_halftimerounds();
+    const char *halfstr = b.round <= halftimerounds ? "First Half" : "Second Half";
+    defformatstring(msg)("\f3Round %d (%s): \f1%s attack\f3, \f1%s defend", b.round, halfstr, team_basestring(b.attackerteam), team_basestring(team_opposite(b.attackerteam)));
     sendservmsg(msg);
-    mlog(DSLOG_INFO, "bomb round %d started, attackers %s, carrier %s", b.round, team_string(b.attackerteam), carrier >= 0 ? clients[carrier]->name : "none");
+    mlog(DSLOG_INFO, "bomb round %d (%s) started, attackers %s, carrier %s", b.round, halfstr, team_string(b.attackerteam), carrier >= 0 ? clients[carrier]->name : "none");
 }
 
 void bomb_endround(int winner, int reason)
@@ -1936,10 +1945,65 @@ void bomb_endround(int winner, int reason)
     sendservmsg(text);
     mlog(DSLOG_INFO, "bomb round %d ended: winner %s, reason %d, score %d-%d", b.round, team_string(winner), reason, b.wins[0], b.wins[1]);
 
+    int halftimerounds = bomb_get_halftimerounds();
+
+    // 1. Check if a team reached the win target
     if(b.wins[0] >= bomb_roundlimit || b.wins[1] >= bomb_roundlimit)
     {
-        sendservmsg("\f2Bomb defusal match over");
+        int matchwinner = b.wins[0] >= bomb_roundlimit ? TEAM_CLA : TEAM_RVSF;
+        defformatstring(mmsg)("\f2Match Over! %s wins the match (%d - %d)!", team_basestring(matchwinner), b.wins[matchwinner], b.wins[team_opposite(matchwinner)]);
+        sendservmsg(mmsg);
+        mlog(DSLOG_INFO, "bomb match won by %s (%d-%d)", team_string(matchwinner), b.wins[0], b.wins[1]);
         sg->forceintermission = true;
+        return;
+    }
+
+    // 2. Check regulation draw (e.g. 7-7 or 12-12 after all regulation rounds)
+    if(b.round >= 2 * halftimerounds)
+    {
+        defformatstring(mmsg)("\f2Match Over! It's a DRAW (%d - %d) after %d rounds!", b.wins[0], b.wins[1], b.round);
+        sendservmsg(mmsg);
+        mlog(DSLOG_INFO, "bomb match draw (%d-%d)", b.wins[0], b.wins[1]);
+        sg->forceintermission = true;
+        return;
+    }
+
+    // 3. Check Halftime trigger
+    if(!b.halftime && b.round == halftimerounds)
+    {
+        b.halftime = 1;
+        b.nextround = sg->gamemillis + (bomb_rounddelay + 3) * 1000;
+        sendservmsg("\f2========================================");
+        sendservmsg("\f2  HALFTIME! SWITCHING SIDES");
+        sendservmsg("\f1  Terrorists and Counter-Terrorists swap teams!");
+        sendservmsg("\f2========================================");
+
+        // Swap scores so players retain their earned score
+        swap(b.wins[0], b.wins[1]);
+        sendbombinfo();
+
+        // Swap player teams smoothly without death penalty
+        loopv(clients)
+        {
+            client *c = clients[i];
+            if(c->type == ST_EMPTY || !c->isauthed || !c->isonrightmap || !team_isactive(c->team)) continue;
+            int newteam = team_opposite(team_base(c->team));
+            updateclientteam(i, newteam, FTR_INFO);
+        }
+        mlog(DSLOG_INFO, "halftime reached at round %d, teams swapped, new score %d-%d", b.round, b.wins[0], b.wins[1]);
+        return;
+    }
+
+    // Match point announcement
+    if(b.wins[0] == bomb_roundlimit - 1)
+    {
+        defformatstring(mpmsg)("\f3[MATCH POINT] \f1%s is on match point (%d - %d)!", team_basestring(TEAM_CLA), b.wins[0], b.wins[1]);
+        sendservmsg(mpmsg);
+    }
+    else if(b.wins[1] == bomb_roundlimit - 1)
+    {
+        defformatstring(mpmsg)("\f3[MATCH POINT] \f1%s is on match point (%d - %d)!", team_basestring(TEAM_RVSF), b.wins[1], b.wins[0]);
+        sendservmsg(mpmsg);
     }
 }
 

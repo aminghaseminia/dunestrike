@@ -47,3 +47,4 @@ private/*
 .DS_Store
 tests/test_bombsite
 tests/test_bomb_dual_site
+tests/test_halftime_match

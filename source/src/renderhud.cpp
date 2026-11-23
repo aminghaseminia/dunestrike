@@ -1104,7 +1104,13 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     if(m_bomb && !intermission)
     {
         int y = 20 + 2*FONTH;
-        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d", bombinfo.wins[0], bombinfo.wins[1], bombinfo.round);
+        extern int bomb_roundlimit, bomb_halftime;
+        int blimit = bomb_roundlimit > 0 ? bomb_roundlimit : 8;
+        int htr = bomb_halftime > 0 ? bomb_halftime : (blimit > 1 ? blimit - 1 : 1);
+        const char *halfinfo = bombinfo.round <= htr ? "1st Half" : "2nd Half";
+        bool matchpoint = (bombinfo.wins[0] == blimit - 1 || bombinfo.wins[1] == blimit - 1);
+        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d (%s)%s",
+            bombinfo.wins[0], bombinfo.wins[1], bombinfo.round, halfinfo, matchpoint ? " \f2[MATCH POINT]" : "");
         draw_text(scoreline, (VIRTW*2 - text_width(scoreline))/2, y, 255, 255, 255);
 
         const char *role = "spectating";

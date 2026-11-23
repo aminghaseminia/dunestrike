@@ -406,6 +406,7 @@ struct sbombinfo
     int result, reason;
     int sites[2][2];
     int lastnotify;
+    int halftime;
 
     void reset()
     {
@@ -413,6 +414,7 @@ struct sbombinfo
         carrier = site = actionactor = -1;
         sites[0][0] = sites[0][1] = sites[1][0] = sites[1][1] = -1;
         lastnotify = -20000;
+        halftime = 0;
     }
 };
 
