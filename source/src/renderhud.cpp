@@ -1484,6 +1484,30 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         rendercommand(HUDPOS_X_BOTTOMLEFT, HUDPOS_Y_BOTTOMLEFT, VIRTW - FONTH);
     }
 
+    // Flashbang blindness screen overlay
+    if(p == player1 && p->flashendmillis > lastmillis)
+    {
+        float total = (float)(p->flashendmillis - p->flashstartmillis);
+        float remain = (float)(p->flashendmillis - lastmillis);
+        float alpha = clamp(remain / (total * 0.7f), 0.0f, 1.0f);
+        if(alpha > 0.01f)
+        {
+            glEnable(GL_BLEND);
+            glDisable(GL_TEXTURE_2D);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(0, VIRTW, VIRTH, 0, -1, 1);
+            glBegin(GL_QUADS);
+            glVertex2f(0, 0);
+            glVertex2f(VIRTW, 0);
+            glVertex2f(VIRTW, VIRTH);
+            glVertex2f(0, VIRTH);
+            glEnd();
+        }
+    }
+
     glDisable(GL_BLEND);
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);

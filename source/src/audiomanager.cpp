@@ -357,6 +357,7 @@ void audiomanager::updateplayerfootsteps(playerent *p)
         if(!((int(p->o.x) | int(p->o.y)) & ~(ssize - 1))) grounddist = waterlevel - S((int)p->o.x, (int)p->o.y)->floor;
         bool water = p->o.z - p->eyeheight+0.25f < waterlevel;
         if(water && grounddist > p->eyeheight) return; // don't play step sound when jumping into water
+        if(p->is_walking) return; // CS silent shift-walk: zero footstep sound emission
 
         int stepsound;
         if(p->crouching) stepsound = water ? S_WATERFOOTSTEPSCROUCH : S_FOOTSTEPSCROUCH; // crouch

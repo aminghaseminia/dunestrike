@@ -190,7 +190,7 @@ public:
     int timeinair;                      // used for fake gravity
     float radius, eyeheight, maxeyeheight, aboveeye;  // bounding box size
     bool inwater;
-    bool onfloor, onladder, jumpnext, jumpd, crouching, crouchedinair, trycrouch, cancollide, stuck, scoping;
+    bool onfloor, onladder, jumpnext, jumpd, crouching, crouchedinair, trycrouch, cancollide, stuck, scoping, is_walking;
     int lastjump;
     float lastjumpheight;
     int lastsplash;
@@ -203,7 +203,7 @@ public:
     float tagscale;                     // CS tagging: initial slowdown multiplier (e.g. 0.42f)
 
     physent() : o(0, 0, 0), deltapos(0, 0, 0), newpos(0, 0, 0), yaw(270), pitch(0), roll(0), pitchvel(0),
-            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0),
+            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), is_walking(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0),
             limpuntil(0), taguntil(0), tagscale(1.0f)
     {
         reset();
@@ -222,7 +222,7 @@ public:
         vel.x = vel.y = vel.z = eyeheightvel = 0.0f;
         move = strafe = 0;
         timeinair = lastjump = lastsplash = 0;
-        onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = false;
+        onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = is_walking = false;
         last_pos = 0;
         limpuntil = 0;
         taguntil = 0;
@@ -506,6 +506,8 @@ public:
     int nextweapon; // weapon we switch to
     int spectatemode, followplayercn;
     int eardamagemillis;
+    int flashendmillis;
+    int flashstartmillis;
     float maxroll, maxrolleffect, movroll, effroll;  // roll added by movement and damage
     int ffov, scopefov;
     bool allowmove() { return (state!=CS_DEAD && state!=CS_SPECTATE) || spectatemode==SM_FLY; }
@@ -526,7 +528,7 @@ public:
     bool nocorpse;
 
     playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
-                  team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
+                  team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), flashendmillis(0), flashstartmillis(0), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
                   prevweaponsel(NULL), weaponsel(NULL), nextweaponsel(NULL), primweap(NULL), nextprimweap(NULL), lastattackweapon(NULL),
                   smoothmillis(-1),
                   head(-1, -1, -1), ignored(false), muted(false), nocorpse(false)
@@ -594,6 +596,7 @@ public:
         weaponchanging = lastmillis - weapons[gunselect]->weaponchangetime/2; // 2011jan16:ft: for a little no-shoot after spawn
         resetspec();
         eardamagemillis = 0;
+        flashendmillis = flashstartmillis = 0;
         eyeheight = maxeyeheight;
         curskin = nextskin[team_base(team)];
         nocorpse = false;
@@ -723,13 +726,16 @@ struct hitmsg
     ivec dir;
 };
 
+enum { NADE_HE = 0, NADE_SMOKE, NADE_FLASH };
+
 class grenadeent : public bounceent
 {
 public:
     bool local;
     int nadestate;
+    int nadetype;
     float distsincebounce;
-    grenadeent(playerent *owner, int millis = 0);
+    grenadeent(playerent *owner, int millis = 0, int type = NADE_HE);
     ~grenadeent();
     void activate(const vec &from, const vec &to);
     void _throw(const vec &from, const vec &vel);

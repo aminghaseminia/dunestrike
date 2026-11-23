@@ -26,6 +26,9 @@ clang++ -O2 -Wall "$DIR/test_designated_team_spawns.cpp" -o "$DIR/test_designate
 clang++ -O2 -Wall "$DIR/test_buyzone_restrictions.cpp" -o "$DIR/test_buyzone_restrictions"
 clang++ -O2 -Wall "$DIR/test_weapons_overhaul.cpp" -o "$DIR/test_weapons_overhaul"
 
+echo "[RUN] Running test_cs_tactical_gameplay..."
+"$DIR/test_cs_tactical_gameplay"
+
 # 2. Run unit tests
 echo "[RUN] Running test_bombsite..."
 "$DIR/test_bombsite"
@@ -70,7 +73,13 @@ echo "[RUN] Running test_buyzone_restrictions..."
 "$DIR/test_buyzone_restrictions"
 
 echo "[RUN] Running test_weapons_overhaul..."
+
+echo "[RUN] Running test_cs_tactical_gameplay..."
+"$DIR/test_cs_tactical_gameplay"
 "$DIR/test_weapons_overhaul"
+
+echo "[RUN] Running test_cs_tactical_gameplay..."
+"$DIR/test_cs_tactical_gameplay"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

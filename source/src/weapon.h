@@ -117,6 +117,7 @@ struct sniperrifle : gun
     void renderhudmodel();
     void renderaimhelp(bool teamwarning);
     void setscope(bool enable);
+    void togglescope();
 };
 
 

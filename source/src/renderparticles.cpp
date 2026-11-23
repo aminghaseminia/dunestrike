@@ -581,6 +581,25 @@ void particle_splash(int type, int num, int fade, const vec &p)
     }
 }
 
+void particle_smokebomb(const vec &p, int num, int fade)
+{
+    if(fade == 0) fade = 1;
+    loopi(num)
+    {
+        const int radius = 260;
+        int x, y, z;
+        do
+        {
+            x = rnd(radius*2)-radius;
+            y = rnd(radius*2)-radius;
+            z = rnd(radius)-radius/3;
+        }
+        while(x*x+y*y+z*z>radius*radius);
+        vec d((float)x, (float)y, (float)z);
+        newparticle(p, d, fade/2 + rnd(fade), 1); // 1 = PART_SMOKE
+    }
+}
+
 void particle_cube(int type, int num, int fade, int x, int y)
 {
     sqr *s = S(x, y);

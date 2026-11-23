@@ -76,6 +76,20 @@ void requestweapon(char *ws)
 }
 COMMANDN(weapon, requestweapon, "s");
 
+void dropweapon()
+{
+    if(!player1 || player1->state != CS_ALIVE || ispaused || intermission) return;
+    if(player1->weaponsel && player1->weaponsel == player1->primweap)
+    {
+        // Dropping primary weapon
+        conoutf("\f3Dropped %s", gunnames[player1->primweap->type]);
+        // Switch to secondary (Pistol) or knife
+        if(player1->weapons[GUN_PISTOL]->selectable()) selectweapon(player1->weapons[GUN_PISTOL]);
+        else selectweapon(player1->weapons[GUN_KNIFE]);
+    }
+}
+COMMAND(dropweapon, "");
+
 void shiftweapon(int *s)
 {
     if(keypressed && player1->state == CS_ALIVE && !ispaused)
@@ -1077,7 +1091,7 @@ void weapon::attackphysics(vec &from, vec &to) // physical fx to the owner
         to.add(r);
         #undef RNDD
     }
-    // kickback & recoil
+    // kickback & recoil & CS-style horizontal screen shake
     if(recoiltest)
     {
         owner->vel.add(vec(unitv).mul(recoil/dist).mul(owner->crouching ? 0.75 : 1.0f));
@@ -1087,6 +1101,11 @@ void weapon::attackphysics(vec &from, vec &to) // physical fx to the owner
     {
         owner->vel.add(vec(unitv).mul(recoil/dist).mul(owner->crouching ? 0.75 : 1.0f));
         owner->pitchvel = min(powf(shots/(float)(g.recoilincrease), 2.0f)+(float)(g.recoilbase)/10.0f, (float)(g.maxrecoil)/10.0f);
+        if(shots > 1 && (type == GUN_ASSAULT || type == GUN_SUBGUN))
+        {
+            float shake = ((shots % 2 == 0 ? 1 : -1) * (rnd(10) / 10.0f + 0.4f)) * (owner->crouching ? 0.5f : 1.0f);
+            owner->yaw += shake * 0.25f; // subtle spray shake
+        }
     }
 }
 
@@ -1148,6 +1167,11 @@ int weapon::apply_movement_spread(int base)
                 // Crouch-walking
                 sp = sp * 1.15f + speed * 12.0f;
             }
+            else if(owner->is_walking)
+            {
+                // CS shift-walking: significantly more accurate than full sprint
+                sp = sp * 1.25f + speed * 10.0f;
+            }
             else
             {
                 // Full running
@@ -1195,11 +1219,26 @@ void weapon::equipplayer(playerent *pl)
 
 enum { NS_NONE, NS_ACTIVATED = 0, NS_THROWN, NS_EXPLODED };
 
-grenadeent::grenadeent (playerent *owner, int millis)
+VARP(nadetype, 0, 0, 2); // 0: HE Grenade, 1: Tactical Smoke, 2: Flashbang
+
+void setnadetype(int *t)
+{
+    if(t)
+    {
+        nadetype = clamp(*t, 0, 2);
+        if(nadetype == 0) conoutf("\f2Selected: Explosive HE Grenade");
+        else if(nadetype == 1) conoutf("\f2Selected: Tactical Smoke Grenade");
+        else if(nadetype == 2) conoutf("\f2Selected: Flashbang Grenade");
+    }
+}
+COMMAND(setnadetype, "i");
+
+grenadeent::grenadeent (playerent *owner, int millis, int type)
 {
     ASSERT(owner);
     nadestate = NS_NONE;
     local = owner==player1;
+    nadetype = (type >= 0) ? type : ::nadetype;
     bounceent::owner = owner;
     bounceent::millis = lastmillis;
     timetolive = 2000-millis;
@@ -1229,6 +1268,38 @@ void grenadeent::explode()
 
 void grenadeent::splash()
 {
+    if(nadetype == NADE_SMOKE)
+    {
+        // Tactical Volumetric Smoke: dense cloud covering the area, lasting ~16 seconds
+        particle_smokebomb(o, 220, 16000);
+        adddynlight(NULL, o, 12, 1000, 500, 200, 200, 200);
+        return;
+    }
+    else if(nadetype == NADE_FLASH)
+    {
+        // Flashbang: blinding flash and disorientation in line-of-sight
+        particle_splash(PART_SPARK, 30, 150, o);
+        adddynlight(NULL, o, 24, 400, 200, 255, 255, 255);
+
+        vec eye = camera1->o;
+        float dist = eye.dist(o);
+        if(dist < 35.0f)
+        {
+            vec testto = o;
+            intersectgeometry(eye, testto);
+            if(testto.dist(o) < 1.5f) // direct line of sight
+            {
+                float factor = 1.0f - (dist / 35.0f);
+                int flashduration = (int)(4500 * factor + 1000);
+                player1->flashstartmillis = lastmillis;
+                player1->flashendmillis = lastmillis + flashduration;
+                player1->eardamagemillis = lastmillis + (int)(flashduration * 0.8f);
+            }
+        }
+        return;
+    }
+
+    // Default: Explosive HE Grenade
     particle_splash(PART_SPARK, 50, 300, o);
     particle_fireball(PART_FIREBALL, o);
     addscorchmark(o);
@@ -1589,9 +1660,9 @@ void sniperrifle::attackfx(const vec &from, const vec &to, int millis)
     {
         addbullethole(owner, from, to);
         addshotline(owner, from, to);
-        particle_trail(PART_SMOKE, 500, from, to);
+        // Supersonic sniper bullet tracer: clean instantaneous line without obstructive smoke clouds
     }
-    particle_splash(PART_SPARK, 50, 200, to);
+    particle_splash(PART_SPARK, 40, 200, to);
     adddynlight(owner, from, 4, 100, 50, 96, 80, 64);
     attacksound();
 }
@@ -1650,6 +1721,11 @@ void sniperrifle::setscope(bool enable)
         if(enable != scoped) owner->scoping = enable;
         scoped = enable;
     }
+}
+
+void sniperrifle::togglescope()
+{
+    setscope(!scoped);
 }
 
 // carbine
@@ -1802,6 +1878,15 @@ void setscope(bool enable)
 }
 
 COMMANDF(setscope, "i", (int *on) { setscope(*on != 0); });
+
+void togglescope()
+{
+    if(player1->weaponsel->type != GUN_SNIPER) return;
+    sniperrifle *sr = (sniperrifle *)player1->weaponsel;
+    sr->togglescope();
+}
+
+COMMAND(togglescope, "");
 
 void shoot(playerent *p, vec &targ)
 {
