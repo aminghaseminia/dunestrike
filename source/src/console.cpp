@@ -184,9 +184,44 @@ keym **findbinda(const char *action, int type)
     return res.getbuf();
 }
 
+int scancodetoasciikey(int scancode)
+{
+    if(scancode >= SDL_SCANCODE_A && scancode <= SDL_SCANCODE_Z)
+        return 'a' + (scancode - SDL_SCANCODE_A);
+    if(scancode >= SDL_SCANCODE_1 && scancode <= SDL_SCANCODE_9)
+        return '1' + (scancode - SDL_SCANCODE_1);
+    if(scancode == SDL_SCANCODE_0) return '0';
+    switch(scancode)
+    {
+        case SDL_SCANCODE_RETURN: return SDLK_RETURN;
+        case SDL_SCANCODE_ESCAPE: return SDLK_ESCAPE;
+        case SDL_SCANCODE_BACKSPACE: return SDLK_BACKSPACE;
+        case SDL_SCANCODE_TAB: return SDLK_TAB;
+        case SDL_SCANCODE_SPACE: return SDLK_SPACE;
+        case SDL_SCANCODE_MINUS: return SDLK_MINUS;
+        case SDL_SCANCODE_EQUALS: return SDLK_EQUALS;
+        case SDL_SCANCODE_LEFTBRACKET: return SDLK_LEFTBRACKET;
+        case SDL_SCANCODE_RIGHTBRACKET: return SDLK_RIGHTBRACKET;
+        case SDL_SCANCODE_BACKSLASH: return SDLK_BACKSLASH;
+        case SDL_SCANCODE_NONUSHASH: return SDLK_HASH;
+        case SDL_SCANCODE_SEMICOLON: return SDLK_SEMICOLON;
+        case SDL_SCANCODE_APOSTROPHE: return SDLK_QUOTE;
+        case SDL_SCANCODE_GRAVE: return SDLK_BACKQUOTE;
+        case SDL_SCANCODE_COMMA: return SDLK_COMMA;
+        case SDL_SCANCODE_PERIOD: return SDLK_PERIOD;
+        case SDL_SCANCODE_SLASH: return SDLK_SLASH;
+        case SDL_SCANCODE_DELETE: return SDLK_DELETE;
+        default:
+            return scancode ? (scancode | SDLK_SCANCODE_MASK) : 0;
+    }
+}
+
 keym *findbindc(int code)
 {
-    return keyms.access(code);
+    keym *km = keyms.access(code);
+    if(!km && code >= 0x06F0 && code <= 0x06F9) km = keyms.access(SDLK_0 + (code - 0x06F0));
+    if(!km && code >= 0x0660 && code <= 0x0669) km = keyms.access(SDLK_0 + (code - 0x0660));
+    return km;
 }
 
 keym *autokeymap(int keycode, int scancode)
@@ -609,19 +644,33 @@ void processtextinput(const char *text)
 
 void keypress(int keycode, int scancode, bool isdown, SDL_Keymod mod)
 {
+    int canonical_code = keycode;
     keym *haskey = keyms.access(keycode);
     if(!haskey && !(keycode & SDLK_SCANCODE_MASK) && scancode) haskey = keyms.access(scancode | SDLK_SCANCODE_MASK); // keycode not found: maybe we know the scancode
-    if(!haskey && scancode) haskey = findbind(SDL_GetScancodeName((SDL_Scancode)scancode)); // fallback to physical hardware key (supports non-Latin keyboard layouts like Persian)
+    if(!haskey && scancode)
+    {
+        int asciikey = scancodetoasciikey(scancode);
+        if(asciikey)
+        {
+            haskey = keyms.access(asciikey);
+            if(haskey) canonical_code = asciikey;
+        }
+    }
+    if(!haskey && scancode)
+    {
+        const char *scname = SDL_GetScancodeName((SDL_Scancode)scancode);
+        if(scname && *scname) haskey = findbind(scname); // fallback to physical hardware key name
+    }
     if(!haskey && isdown) haskey = autokeymap(keycode, scancode);
     if(haskey && haskey->pressed) execbind(*haskey, isdown); // allow pressed keys to release
-    else if(saycommandon) consolekey(keycode, isdown, mod); // keystrokes go to commandline
-    else if(!menukey(keycode, isdown)) // keystrokes go to menu
+    else if(saycommandon) consolekey(canonical_code, isdown, mod); // keystrokes go to commandline
+    else if(!menukey(canonical_code, isdown)) // keystrokes go to menu
     {
         if(haskey) execbind(*haskey, isdown);
     }
-    if(keycode & SDLK_SCANCODE_MASK) scancode = keycode & ~SDLK_SCANCODE_MASK;
-    if(isdown) exechook(HOOK_SP, "KEYPRESS", "KEYPRESS %d %d", keycode, scancode);
-    else exechook(HOOK_SP, "KEYRELEASE", "%d %d", keycode, scancode);
+    if(canonical_code & SDLK_SCANCODE_MASK) scancode = canonical_code & ~SDLK_SCANCODE_MASK;
+    if(isdown) exechook(HOOK_SP, "KEYPRESS", "KEYPRESS %d %d", canonical_code, scancode);
+    else exechook(HOOK_SP, "KEYRELEASE", "%d %d", canonical_code, scancode);
 }
 
 char *getcurcommand(int *pos)

@@ -20,6 +20,7 @@ clang++ -O2 -Wall "$DIR/test_bomb_audio_tempo.cpp" -o "$DIR/test_bomb_audio_temp
 clang++ -O2 -Wall "$DIR/test_radar_tactical_hud.cpp" -o "$DIR/test_radar_tactical_hud"
 clang++ -O2 -Wall "$DIR/test_cs_factions_models.cpp" -o "$DIR/test_cs_factions_models"
 clang++ -O2 -Wall `sdl2-config --cflags` "$DIR/test_scancode_keyboard_fallback.cpp" `sdl2-config --libs` -o "$DIR/test_scancode_keyboard_fallback"
+clang++ -O2 -Wall `sdl2-config --cflags` "$DIR/test_all_keys_persian.cpp" `sdl2-config --libs` -o "$DIR/test_all_keys_persian"
 
 # 2. Run unit tests
 echo "[RUN] Running test_bombsite..."
@@ -51,6 +52,9 @@ echo "[RUN] Running test_cs_factions_models..."
 
 echo "[RUN] Running test_scancode_keyboard_fallback..."
 "$DIR/test_scancode_keyboard_fallback"
+
+echo "[RUN] Running test_all_keys_persian..."
+"$DIR/test_all_keys_persian"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

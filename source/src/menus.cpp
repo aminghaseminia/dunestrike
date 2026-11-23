@@ -1143,6 +1143,11 @@ int movemenuselection(int currentmenusel, int direction)
 bool menukey(int code, bool isdown, SDL_Keymod mod)
 {
     if(!curmenu) return false;
+    // Map Eastern Arabic / Persian digits to standard digit keycodes
+    if(code >= 0x06F1 && code <= 0x06F9) code = SDLK_1 + (code - 0x06F1);
+    else if(code >= 0x0661 && code <= 0x0669) code = SDLK_1 + (code - 0x0661);
+    else if(code == 0x06F0 || code == 0x0660) code = SDLK_0;
+
     int n = curmenu->items.length(), menusel = curmenu->menusel;
 
     if(curmenu->items.inrange(menusel) && !curmenu->items[menusel]->greyedout)
