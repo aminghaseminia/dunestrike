@@ -837,6 +837,7 @@ extern void hudeditf(int type, const char *s, ...) PRINTFARGS(2, 3);
 extern void show_out_of_renderloop_progress(float bar1, const char *text1, float bar2 = 0, const char *text2 = NULL);
 extern void updatedmgindicator(playerent *p, vec &attack);
 extern vec getradarpos();
+extern int radarposition;
 
 // renderparticles
 enum

@@ -35,7 +35,21 @@ struct console : consolebuffer<cline>
 
     void render()
     {
-        int conwidth = (fullconsole ? VIRTW : int(floor(getradarpos().x)))*2 - 2*CONSPAD - 2*FONTH/3;
+        int conleft = CONSPAD+FONTH/3;
+        int conwidth = 0;
+        if(fullconsole)
+        {
+            conwidth = VIRTW*2 - 2*CONSPAD - 2*FONTH/3;
+        }
+        else if(radarposition == 0)
+        {
+            conleft = int(ceil(getradarpos().x * 2.0f)) + CONSPAD;
+            conwidth = VIRTW*2 - conleft - CONSPAD - 2*FONTH/3;
+        }
+        else
+        {
+            conwidth = int(floor(getradarpos().x))*2 - 2*CONSPAD - 2*FONTH/3;
+        }
         int h = VIRTH*2 - 2*CONSPAD - 2*FONTH/3;
         int conheight = min(fullconsole ? (h*(fullconsole==1 ? altconsize : fullconsize))/100 : FONTH*consize, h);
 
@@ -69,7 +83,7 @@ struct console : consolebuffer<cline>
         {
             int idx = offset + numl-i-1;
             char *line = conlines[idx].line;
-            draw_text(line, CONSPAD+FONTH/3, y, 0xFF, 0xFF, 0xFF, fullconsole ? 0xFF : conalpha, -1, conwidth);
+            draw_text(line, conleft, y, 0xFF, 0xFF, 0xFF, fullconsole ? 0xFF : conalpha, -1, conwidth);
             int width, height;
             text_bounds(line, width, height, conwidth);
             y += height;

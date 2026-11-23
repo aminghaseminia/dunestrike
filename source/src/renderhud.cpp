@@ -461,10 +461,17 @@ bool insideradar(const vec &centerpos, float radius, const vec &o)
 
 bool isattacking(playerent *p) { return lastmillis-p->lastaction < 500; }
 
+VARP(radarposition, 0, 0, 1);
+
 vec getradarpos()
 {
-    float radarviewsize = VIRTH/6;
-    float overlaysize = radarviewsize*4.0f/3.25f;
+    float radarviewsize = min(VIRTW, VIRTH)/5;
+    float halfviewsize = radarviewsize/2.0f;
+    if(radarposition == 0)
+    {
+        return vec(radarviewsize + 88, radarviewsize + 80, 0);
+    }
+    float overlaysize = (VIRTH/6)*4.0f/3.25f;
     return vec(VIRTW-10-VIRTH/28-overlaysize, 10+VIRTH/52, 0);
 }
 
@@ -582,7 +589,8 @@ void drawradar_showmap(playerent *p, int w, int h)
             if(bombinfo.sites[i].x >= 0 && !OUTBORD(bombinfo.sites[i].x, bombinfo.sites[i].y))
             {
                 vec pos = vec(bombinfo.sites[i].x, bombinfo.sites[i].y, 0).sub(mdd).mul(coordtrans);
-                drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+                bool is_planted_here = (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING) && (bombinfo.site == i);
+                drawradarent(pos.x, pos.y, 0, is_planted_here ? 2 : 3, is_planted_here ? 3 : 2, iconsize, true, i == 0 ? "Site A" : "Site B"); // bomb site
             }
         }
         if(bombinfo.pos.x >= 0 && !OUTBORD(bombinfo.pos.x, bombinfo.pos.y)
@@ -618,7 +626,7 @@ void drawradar_vicinity(playerent *p, int w, int h)
     float d2s = radarheight * radarheight / 4.0f;
     glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
-    vec centerpos(VIRTW-halfviewsize-72, halfviewsize+64, 0);
+    vec centerpos(radarposition == 0 ? (halfviewsize+72) : (VIRTW-halfviewsize-72), halfviewsize+64, 0);
     glTranslatef(centerpos.x, centerpos.y, 0);
     glRotatef(-camera1->yaw, 0, 0, 1);
     glTranslatef(-halfviewsize, -halfviewsize, 0);
@@ -644,6 +652,10 @@ void drawradar_vicinity(playerent *p, int w, int h)
         {
             rtmp.mul(scaled);
             drawradarent(rtmp.x, rtmp.y, pl->yaw, pl->state==CS_ALIVE ? (isattacking(pl) ? 2 : 0) : 1, spect3rd && d == pl ? 2 : pl_baseteam, iconsize, isattacking(pl), "%s", colorname(pl));
+            if(m_bomb && bombinfo.carrier == pl->clientnum)
+            {
+                drawradarent(rtmp.x + iconsize*0.4f, rtmp.y - iconsize*0.4f, 0, 2, 3, iconsize*0.75f, true);
+            }
         }
     }
     if(m_flags_)
@@ -710,22 +722,49 @@ void drawradar_vicinity(playerent *p, int w, int h)
             if(bombinfo.sites[i].x >= 0)
             {
                 vec pos = vec(bombinfo.sites[i].x, bombinfo.sites[i].y, 0).sub(d->o);
-                if(pos.sqrxy() < d2s)
+                pos.z = 0;
+                float dist = pos.magnitude();
+                float maxdist = radarheight / 2.0f;
+                if(dist > maxdist && maxdist > 0)
                 {
-                    pos.mul(scaled);
-                    drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+                    pos.mul(maxdist * 0.90f / dist);
                 }
+                pos.mul(scaled);
+
+                bool is_planted_here = (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING) && (bombinfo.site == i);
+                drawradarent(pos.x, pos.y, 0, is_planted_here ? 2 : 3, is_planted_here ? 3 : 2, iconsize, true); // bomb site
+
+                glPushMatrix();
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glTranslatef(pos.x + iconsize * 0.4f, pos.y - iconsize * 0.5f, 0);
+                glScalef(0.6f, 0.6f, 1.0f);
+                if(is_planted_here)
+                {
+                    int flash = (lastmillis / 150) % 2;
+                    draw_text(i == 0 ? "A" : "B", 0, 0, 0xFF, flash ? 0x20 : 0xFF, flash ? 0x20 : 0x20);
+                }
+                else
+                {
+                    draw_text(i == 0 ? "A" : "B", 0, 0, 0x55, 0xFF, 0x55);
+                }
+                glDisable(GL_BLEND);
+                glPopMatrix();
             }
         }
         if(bombinfo.pos.x >= 0 && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
             || (bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)))
         {
             vec pos = vec(bombinfo.pos).sub(d->o);
-            if(pos.sqrxy() < d2s)
+            pos.z = 0;
+            float dist = pos.magnitude();
+            float maxdist = radarheight / 2.0f;
+            if(dist > maxdist && maxdist > 0)
             {
-                pos.mul(scaled);
-                drawradarent(pos.x, pos.y, 0, 2, 3, iconsize, true); // bomb
+                pos.mul(maxdist * 0.90f / dist);
             }
+            pos.mul(scaled);
+            drawradarent(pos.x, pos.y, 0, 2, 3, iconsize, true); // bomb
         }
     }
     glEnable(GL_BLEND);
@@ -1141,7 +1180,8 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         else if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
         {
             int remaining = max(0, bombinfo.timeremaining - elapsed);
-            formatstring(timerline)("\f1BOMB %02d:%02d", remaining/60000, (remaining/1000)%60);
+            const char *sitename = (bombinfo.site == 0 ? "SITE A" : (bombinfo.site == 1 ? "SITE B" : "UNKNOWN"));
+            formatstring(timerline)("\f3C4 PLANTED [%s] - %02d:%02d", sitename, remaining/60000, (remaining/1000)%60);
             draw_text(timerline, (VIRTW*2 - text_width(timerline))/2, y + 2*FONTH, 255, 255, 255);
         }
         else if(bombinfo.state == BOMB_LIVE)
@@ -1157,9 +1197,10 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             int pct = bombinfo.actionduration > 0 ? 100 - (remaining * 100 / bombinfo.actionduration) : 0;
             if(pct < 0) pct = 0;
             else if(pct > 100) pct = 100;
-            defformatstring(actionline)("\f3%s%s %d%%",
+            const char *sitename = (bombinfo.site == 0 ? "SITE A" : (bombinfo.site == 1 ? "SITE B" : "SITE ?"));
+            defformatstring(actionline)("\f3%s AT %s (%d%%)",
                 bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING",
-                (bombinfo.state == BOMB_PLANTING && bombinfo.site >= 0 && bombinfo.site < 2) ? (bombinfo.site == 0 ? " AT SITE A" : " AT SITE B") : "",
+                sitename,
                 pct);
             draw_text(actionline, (VIRTW*2 - text_width(actionline))/2, y + 3*FONTH, 255, 255, 255);
         }
