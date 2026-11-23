@@ -496,6 +496,8 @@ public:
     int lifesequence;                   // sequence id for each respawn, used in damage test
     int frags, flagscore, deaths, tks;
     int lastaction, lastmove, lastpain, lastvoicecom, lastdeath;
+    int lastspawn;
+    vec spawnpos;
     int clientrole;
     bool attacking;
     string name;
@@ -523,7 +525,7 @@ public:
     bool ignored, muted;
     bool nocorpse;
 
-    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), clientrole(CR_DEFAULT),
+    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
                   team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
                   prevweaponsel(NULL), weaponsel(NULL), nextweaponsel(NULL), primweap(NULL), nextprimweap(NULL), lastattackweapon(NULL),
                   smoothmillis(-1),
@@ -588,6 +590,7 @@ public:
         lastattackweapon = NULL;
         attacking = false;
         extern int lastmillis;
+        lastspawn = lastmillis;
         weaponchanging = lastmillis - weapons[gunselect]->weaponchangetime/2; // 2011jan16:ft: for a little no-shoot after spawn
         resetspec();
         eardamagemillis = 0;

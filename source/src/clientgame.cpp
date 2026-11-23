@@ -791,9 +791,111 @@ void gotoplayerstart(playerent *d, entity *e)
     d->roll = d->movroll = d->effroll = 0;
 }
 
+vec team_spawn_base[2] = { vec(0, 0, 0), vec(0, 0, 0) };
+bool team_spawn_base_init[2] = { false, false };
+
+void init_team_spawns()
+{
+    loopi(2)
+    {
+        team_spawn_base[i] = vec(0, 0, 0);
+        team_spawn_base_init[i] = false;
+    }
+    vector<int> team_spawns[2];
+    loopv(ents)
+    {
+        entity &e = ents[i];
+        if(e.type == PLAYERSTART)
+        {
+            if(e.attr2 == 0) team_spawns[0].add(i);
+            else if(e.attr2 == 1) team_spawns[1].add(i);
+        }
+    }
+    loopi(2)
+    {
+        if(team_spawns[i].length() > 0)
+        {
+            vec sum(0, 0, 0);
+            loopvj(team_spawns[i]) sum.add(vec(ents[team_spawns[i][j]].x, ents[team_spawns[i][j]].y, ents[team_spawns[i][j]].z));
+            sum.div((float)team_spawns[i].length());
+            team_spawn_base[i] = sum;
+            team_spawn_base_init[i] = true;
+        }
+    }
+    if(!team_spawn_base_init[0] || !team_spawn_base_init[1])
+    {
+        vector<int> all_spawns;
+        loopv(ents) if(ents[i].type == PLAYERSTART) all_spawns.add(i);
+        if(all_spawns.length() >= 2)
+        {
+            float maxdist = -1.0f;
+            int best_a = all_spawns[0], best_b = all_spawns[1];
+            loopv(all_spawns)
+            {
+                for(int j = i + 1; j < all_spawns.length(); j++)
+                {
+                    vec p1(ents[all_spawns[i]].x, ents[all_spawns[i]].y, ents[all_spawns[i]].z);
+                    vec p2(ents[all_spawns[j]].x, ents[all_spawns[j]].y, ents[all_spawns[j]].z);
+                    float d = p1.dist(p2);
+                    if(d > maxdist)
+                    {
+                        maxdist = d;
+                        best_a = all_spawns[i];
+                        best_b = all_spawns[j];
+                    }
+                }
+            }
+            team_spawn_base[0] = vec(ents[best_a].x, ents[best_a].y, ents[best_a].z);
+            team_spawn_base[1] = vec(ents[best_b].x, ents[best_b].y, ents[best_b].z);
+            team_spawn_base_init[0] = team_spawn_base_init[1] = true;
+        }
+    }
+}
+
+bool in_buy_zone(playerent *d)
+{
+    if(!d || d->state != CS_ALIVE) return false;
+    if(editmode) return true;
+    if(!m_teammode)
+    {
+        // In non-team modes, buyzone is anywhere near respawn point
+        if(d->spawnpos.squaredlen() > 0 && d->o.dist(d->spawnpos) <= 60.0f) return true;
+        return false;
+    }
+    int type = team_base(d->team);
+    if(type != 0 && type != 1) return false;
+
+    // Check proximity to own spawn position
+    if(d->spawnpos.squaredlen() > 0 && d->o.dist(d->spawnpos) <= 80.0f) return true;
+
+    // Check proximity to team designated base centroid
+    if(!team_spawn_base_init[type]) init_team_spawns();
+    if(team_spawn_base_init[type] && d->o.dist(team_spawn_base[type]) <= 90.0f) return true;
+
+    // Check proximity to any playerstart entity of own team
+    loopv(ents)
+    {
+        if(ents[i].type == PLAYERSTART && ents[i].attr2 == type)
+        {
+            if(d->o.dist(vec(ents[i].x, ents[i].y, ents[i].z)) <= 60.0f) return true;
+        }
+    }
+    return false;
+}
+
+bool can_buy(playerent *d)
+{
+    if(!d || d->state != CS_ALIVE) return false;
+    if(editmode) return true;
+    // 10-second buy time limit after spawn / round start
+    if(lastmillis - d->lastspawn > 10000) return false;
+    // Must be in designated team buy zone
+    if(!in_buy_zone(d)) return false;
+    return true;
+}
+
 void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
 {
-    int r = fixspawn-->0 ? 4 : rnd(10)+1;
     entity *e = NULL;
     if(!mapcenter)
     {
@@ -804,13 +906,56 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
             loopi(arenaspawn + 1) x = findentity(PLAYERSTART, x+1, type);
             if(x >= 0) e = &ents[x];
         }
+        else if(m_teammode && (type == 0 || type == 1))
+        {
+            // Designated Team Spawns: All members of a team spawn strictly at their designated team base!
+            vector<int> team_spawns;
+            loopv(ents)
+            {
+                if(ents[i].type == PLAYERSTART && ents[i].attr2 == type)
+                    team_spawns.add(i);
+            }
+            if(team_spawns.length() > 0)
+            {
+                static int team_cycle[2] = { -1, -1 };
+                team_cycle[type] = (team_cycle[type] + 1) % team_spawns.length();
+                e = &ents[team_spawns[team_cycle[type]]];
+            }
+            else
+            {
+                // Fallback for maps without team tags: partition by designated team base
+                if(!team_spawn_base_init[0] || !team_spawn_base_init[1]) init_team_spawns();
+                float closest_dist = -1.0f;
+                int closest_spawn = -1;
+                loopv(ents)
+                {
+                    if(ents[i].type == PLAYERSTART)
+                    {
+                        vec spos(ents[i].x, ents[i].y, ents[i].z);
+                        float d_team = spos.dist(team_spawn_base[type]);
+                        float d_enemy = spos.dist(team_spawn_base[1 - type]);
+                        if(d_team <= d_enemy)
+                        {
+                            if(closest_spawn < 0 || d_team < closest_dist)
+                            {
+                                closest_dist = d_team;
+                                closest_spawn = i;
+                            }
+                        }
+                    }
+                }
+                if(closest_spawn >= 0) e = &ents[closest_spawn];
+            }
+        }
         else if((m_teammode || m_arena) && !m_ktf) // ktf uses ffa spawns
         {
+            int r = fixspawn-->0 ? 4 : rnd(10)+1;
             loopi(r) spawncycle = findentity(PLAYERSTART, spawncycle+1, type);
             if(spawncycle >= 0) e = &ents[spawncycle];
         }
         else
         {
+            int r = fixspawn-->0 ? 4 : rnd(10)+1;
             float bestdist = -1;
 
             loopi(r)
@@ -832,6 +977,8 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
         d->o.x = d->o.y = (float)ssize/2;
         d->o.z = 4;
     }
+    d->lastspawn = lastmillis;
+    d->spawnpos = d->o;
     entinmap(d);
     exechook(HOOK_SP, "onSpawn", "%d", d->clientnum);
 }
@@ -1363,6 +1510,7 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     preparectf(!(m_flags_ || m_bomb));
     suicided = -1;
     spawncycle = -1;
+    init_team_spawns();
     lasthit = 0;
     if(m_valid(gamemode) && !m_mp(gamemode)) respawnself();
     else findplayerstart(player1);
