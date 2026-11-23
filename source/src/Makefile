@@ -112,9 +112,11 @@ CLIENT_OBJS= \
 	worldocull.o \
 	worldrender.o \
 	zip.o \
+	aibot.o \
 	bot/bot.o \
 	bot/botmanager.o \
 	bot/bot_ai.o \
+	bot/bot_team.o \
 	bot/bot_util.o \
 	bot/bot_waypoint.o \
 	bot/ds_bot.o \
@@ -137,6 +139,7 @@ SERVER_OBJS= \
 	crypto-standalone.o \
 	log-standalone.o \
 	protocol-standalone.o \
+	serverbots-standalone.o \
 	serverms-standalone.o \
 	server-standalone.o \
 	stream-standalone.o \
@@ -374,6 +377,12 @@ zip.o: entity.h world.h command.h varray.h vote.h console.h protos.h
 bot/bot.o: cube.h platform.h tools.h geom.h model.h protocol.h sound.h
 bot/bot.o: weapon.h entity.h world.h command.h varray.h vote.h console.h
 bot/bot.o: protos.h bot/bot.h bot/bot_util.h bot/bot_waypoint.h bot/ds_bot.h
+aibot.o: cube.h platform.h tools.h geom.h model.h protocol.h sound.h
+aibot.o: weapon.h entity.h world.h command.h varray.h vote.h console.h
+aibot.o: protos.h bot/bot.h bot/bot_util.h bot/bot_waypoint.h bot/ds_bot.h aibot.h
+bot/bot_team.o: cube.h platform.h tools.h geom.h model.h protocol.h sound.h
+bot/bot_team.o: weapon.h entity.h world.h command.h varray.h vote.h console.h
+bot/bot_team.o: protos.h bot/bot.h bot/bot_util.h bot/bot_waypoint.h bot/ds_bot.h
 bot/botmanager.o: cube.h platform.h tools.h geom.h model.h protocol.h sound.h
 bot/botmanager.o: weapon.h entity.h world.h command.h varray.h vote.h
 bot/botmanager.o: console.h protos.h bot/bot.h bot/bot_util.h
@@ -420,6 +429,9 @@ server-standalone.o: sound.h weapon.h entity.h world.h command.h varray.h
 server-standalone.o: vote.h console.h protos.h server.h servercontroller.h
 server-standalone.o: serverfiles.h serverchecks.h serverevents.h
 server-standalone.o: serveractions.h
+serverbots-standalone.o: cube.h platform.h tools.h geom.h model.h protocol.h
+serverbots-standalone.o: sound.h weapon.h entity.h world.h command.h varray.h
+serverbots-standalone.o: vote.h console.h protos.h server.h serverbots.h
 stream-standalone.o: cube.h platform.h tools.h geom.h model.h protocol.h
 stream-standalone.o: sound.h weapon.h entity.h world.h command.h varray.h
 stream-standalone.o: vote.h console.h protos.h

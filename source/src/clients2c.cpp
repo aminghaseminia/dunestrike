@@ -1193,7 +1193,9 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                         else filtertext(text, behindpath(text), FTXT__MAPNAME);
                         itoa(a1, mode);
                         defformatstring(t)("%d", getint(p));
-                        v = newvotedisplayinfo(d, type, text, a1, t);
+                        int botcount = getint(p);
+                        int botskill = getint(p);
+                        v = newvotedisplayinfo(d, type, text, a1, t, botcount, botskill);
                         break;
                     }
                     case SA_KICK:

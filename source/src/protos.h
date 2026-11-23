@@ -524,6 +524,7 @@ extern void disconnect(int onlyclean = 0, int async = 0);
 extern void cleanupclient();
 extern void toserver(char *text);
 extern void addmsg(int type, const char *fmt = NULL, ...);
+extern void clearc2smessages();
 extern bool multiplayer(const char *op = "");
 extern bool allowedittoggle();
 extern void sendpackettoserv(int chan, ENetPacket *packet);
@@ -575,7 +576,7 @@ extern playerent *newclient(int cn);
 extern void timeupdate(int milliscur, int millismax); // was (int timeremain);
 extern void respawnself();
 extern void setskin(playerent *pl, int skin, int team = -1);
-extern void callvote(int type, const char *arg1 = NULL, const char *arg2 = NULL, const char *arg3 = NULL);
+extern void callvote(int type, const char *arg1 = NULL, const char *arg2 = NULL, const char *arg3 = NULL, int botcount = 0, int botskill = 2);
 extern void addsleep(int msec, const char *cmd, bool persist = false);
 extern void resetsleep(bool force = false);
 extern int lastpm;
@@ -638,12 +639,13 @@ struct votedisplayinfo
 {
     playerent *owner;
     int type, stats[VOTE_NUM], result, millis;
+    int botcount, botskill;
     string desc;
     bool localplayervoted;
-    votedisplayinfo() : owner(NULL), result(VOTE_NEUTRAL), millis(0), localplayervoted(false) { loopi(VOTE_NUM) stats[i] = VOTE_NEUTRAL; }
+    votedisplayinfo() : owner(NULL), result(VOTE_NEUTRAL), millis(0), botcount(0), botskill(2), localplayervoted(false) { loopi(VOTE_NUM) stats[i] = VOTE_NEUTRAL; }
 };
 
-extern votedisplayinfo *newvotedisplayinfo(playerent *owner, int type, const char *arg1, const char *arg2, const char *arg3 = "");
+extern votedisplayinfo *newvotedisplayinfo(playerent *owner, int type, const char *arg1, const char *arg2, const char *arg3 = "", int botcount = 0, int botskill = 2);
 extern void callvotesuc();
 extern void callvoteerr(int e);
 extern void displayvote(votedisplayinfo *v);

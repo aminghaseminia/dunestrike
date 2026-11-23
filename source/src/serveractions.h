@@ -37,9 +37,13 @@ struct mapaction : serveraction
 {
     char *map;
     int mode, time;
+    int botcount, botskill;
     bool mapok, queue;
     void perform()
     {
+#ifdef STANDALONE
+        serverbots_setpending(botcount, botskill);
+#endif
         if(queue)
         {
             sg->nextgamemode = mode;
@@ -59,7 +63,7 @@ struct mapaction : serveraction
     bool isvalid() { return serveraction::isvalid() && mode != GMODE_DEMO && map[0] && mapok && !(isdedicated && !m_mp(mode)); }
 
     bool isdisabled() { return false /*maprot.current() && !maprot.current()->vote*/; }
-    mapaction(char *map, int mode, int time, int caller, bool q) : map(map), mode(mode), time(time), queue(q)
+    mapaction(char *map, int mode, int time, int botcount, int botskill, int caller, bool q) : map(map), mode(mode), time(time), botcount(botcount), botskill(botskill), queue(q)
     {
         if(isdedicated)
         {
@@ -141,6 +145,11 @@ struct mapaction : serveraction
         }
         area |= EE_LOCAL_SERV;
         formatstring(desc)("load map '%s' in mode '%s'", map, modestr(mode));
+        if(botcount > 0)
+        {
+            static const char *botskills[5] = { "best", "good", "medium", "worse", "bad" };
+            concatformatstring(desc, " with %d bot%s (%s)", botcount, botcount == 1 ? "" : "s", botskills[botskill < 0 ? 2 : (botskill > 4 ? 4 : botskill)]);
+        }
         if(q) concatstring(desc, " (in the next game)");
     }
     ~mapaction() { DELETEA(map); }

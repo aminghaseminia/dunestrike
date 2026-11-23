@@ -13,6 +13,13 @@ VARP(serverdebug, 0, 0, 1);
 #include "server.h"
 #include "servercontroller.h"
 #include "serverfiles.h"
+#include "serverbots.h"
+
+SERVPAR(bot_max, 0, 8, SERVERBOTS_MAX, "DMaximum number of server-managed AI bots");
+SERVPAR(bot_default_count, 0, 0, SERVERBOTS_MAX, "DNumber of server-managed bots for a new game");
+SERVPAR(bot_default_skill, 0, 2, 4, "DSkill level for server-managed bots (0 best .. 4 bad)");
+SERVSTR(bot_prefix, "SrvBot-", 0, 15, FTXT__PLAYERNAME, "DName prefix for server-managed bots");
+SERVSTR(bot_clientpath, "bin_unix/dunestrike_client", 0, 255, FTXT__MEDIAFILEPATH, "DPath to the headless bot client binary");
 
 #include "signal.h"
 
@@ -2963,6 +2970,9 @@ void startgame(const char *newname, int newmode, int newtime, bool notify)
         if(notify && m_ktf) sendflaginfo();
         if(notify && m_bomb) sendbombinfo();
         if(notify) senddisconnectedscores(-1);
+#ifdef STANDALONE
+        serverbots_onstartgame();
+#endif
     }
 }
 
@@ -3053,12 +3063,13 @@ struct voteinfo
 {
     int boot;
     int owner, callmillis, result, num1, num2, type;
+    int botcount, botskill;
     char text[MAXTRANS];
     serveraction *action;
     bool gonext;
     enet_uint32 host;
 
-    voteinfo() : boot(0), owner(0), callmillis(0), result(VOTE_NEUTRAL), action(NULL), gonext(false), host(0) {}
+    voteinfo() : boot(0), owner(0), callmillis(0), result(VOTE_NEUTRAL), botcount(0), botskill(2), action(NULL), gonext(false), host(0) {}
     ~voteinfo() { delete action; }
 
     void end(int result)
@@ -3084,7 +3095,7 @@ struct voteinfo
         int stats[VOTE_NUM] = {0};
         int adminvote = VOTE_NEUTRAL;
         loopv(clients)
-            if(clients[i]->type!=ST_EMPTY /*&& clients[i]->connectmillis < callmillis*/) // new connected people will vote now
+            if(clients[i]->type!=ST_EMPTY && !clients[i]->isbot /*&& clients[i]->connectmillis < callmillis*/) // new connected people will vote now
             {
                 stats[clients[i]->vote]++;
                 if(clients[i]->role==CR_ADMIN) adminvote = clients[i]->vote;
@@ -3094,7 +3105,7 @@ struct voteinfo
         int total = stats[VOTE_NO]+stats[VOTE_YES]+stats[VOTE_NEUTRAL];
         const float requiredcount = 0.51f;
         bool min_time = servmillis - callmillis > 10*1000;
-#define yes_condition ((min_time && stats[VOTE_YES] - stats[VOTE_NO] > 0.34f*total && totalclients > 4) || stats[VOTE_YES] > requiredcount*total)
+#define yes_condition ((min_time && stats[VOTE_YES] - stats[VOTE_NO] > 0.34f*total && total > 4) || stats[VOTE_YES] > requiredcount*total)
 #define no_condition (forceend || !valid_client(owner) || stats[VOTE_NO] >= stats[VOTE_YES]+stats[VOTE_NEUTRAL] || adminvote == VOTE_NO)
 #define boot_condition (!boot || (boot && valid_client(num1) && clients[num1]->peer->address.host == host))
         if( (yes_condition || admin || adminvote == VOTE_YES) && boot_condition ) end(VOTE_YES);
@@ -3222,6 +3233,8 @@ void callvotepacket (int cn, voteinfo *v = curvote)
             sendstring(v->text, q);
             putint(q, v->num1);
             putint(q, v->num2);
+            putint(q, v->botcount);
+            putint(q, v->botskill);
             break;
         case SA_SERVERDESC:
             sendstring(v->text, q);
@@ -3702,6 +3715,12 @@ void process(ENetPacket *packet, int sender, int chan)
             filtertext(text, text, FTXT__PLAYERNAME, MAXNAMELEN);
             if(!text[0]) copystring(text, "unarmed");
             copystring(cl->name, text, MAXNAMELEN+1);
+#ifdef STANDALONE
+            cl->isbot = serverbots_isbotname(cl->name) && cl->peer &&
+                        cl->peer->address.host == ENET_HOST_TO_NET_32(0x7F000001);
+#else
+            cl->isbot = false;
+#endif
             getstring(text, p);
             copystring(cl->pwd, text);
             getstring(text, p);
@@ -4610,6 +4629,11 @@ void process(ENetPacket *packet, int sender, int chan)
                     {
                         getstring(text, p);
                         int mode = getint(p), time = getint(p);
+                        vi->botcount = getint(p);
+                        vi->botskill = getint(p);
+                        if(vi->botcount < 0) vi->botcount = 0;
+                        if(vi->botcount > SERVERBOTS_MAX) vi->botcount = SERVERBOTS_MAX;
+                        if(vi->botskill < 0 || vi->botskill > 4) vi->botskill = 2;
                         vi->gonext = text[0]=='+' && text[1]=='1';
                         if(m_isdemo(mode)) filtertext(text, text, FTXT__DEMONAME);
                         else filtertext(text, behindpath(text), FTXT__MAPNAME);
@@ -4637,7 +4661,7 @@ void process(ENetPacket *packet, int sender, int chan)
                         else
                         {
                             char *vmap = newstring(*vi->text ? behindpath(vi->text) : "");
-                            vi->action = new mapaction(vmap, qmode, time, sender, qmode!=mode);
+                            vi->action = new mapaction(vmap, qmode, time, vi->botcount, vi->botskill, sender, qmode!=mode);
                         }
                         break;
                     }
@@ -5192,6 +5216,9 @@ void serverslice(uint timeout)   // main server update, called from cube main lo
     }
 
     resetserverifempty();
+#ifdef STANDALONE
+    serverbots_think();
+#endif
     polldeferredprocessing();
     checkdemotransmissions();
 
@@ -5294,6 +5321,9 @@ void serverslice(uint timeout)   // main server update, called from cube main lo
 
 void cleanupserver()
 {
+#ifdef STANDALONE
+    serverbots_shutdown();
+#endif
     if(serverhost) { enet_host_destroy(serverhost); serverhost = NULL; }
     if(svcctrl)
     {
@@ -5531,6 +5561,9 @@ void initserver(bool dedicated)
     {
         serverparameters.init(scl.parfilepath);
         if(serverparameters.load()) serverparameters.read(); // do this early, so the parameters are properly set during initialisation
+#ifdef STANDALONE
+        serverbots_init();
+#endif
         ENetAddress address = { ENET_HOST_ANY, (enet_uint16)scl.serverport };
         if(scl.ip[0] && enet_address_set_host(&address, scl.ip)<0) mlog(DSLOG_WARNING, "server ip not resolved!");
         serverhost = enet_host_create(&address, scl.maxclients+1, 3, 0, scl.uprate);

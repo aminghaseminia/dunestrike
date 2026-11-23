@@ -2,6 +2,7 @@
 
 #include "cube.h"
 #include "bot/bot.h"
+#include "aibot.h"
 
 int nextmode = 0;   // nextmode becomes gamemode after next map load
 VAR(gamemode, 1, 0, 0);
@@ -704,7 +705,8 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
     syncentchanges();
     physicsframe();
     checkweaponstate();
-    if(getclientnum()>=0) shoot(player1, worldpos);     // only shoot when connected to server
+    if(aibotmode) updateaibot();                        // headless AI drives player1
+    else if(getclientnum()>=0) shoot(player1, worldpos); // only shoot when connected to server
     movebounceents();
     moveotherplayers();
     gets2c();
@@ -712,7 +714,7 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
     bombcheck();
 
     // Added by Rick: let bots think
-    if(m_botmode) BotManager.Think();
+    if(m_botmode && !aibotmode) BotManager.Think();
 
     movelocalplayer();
     c2sinfo(player1);   // do this last, to reduce the effective frame lag
@@ -1265,6 +1267,7 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     sendmapidenttoserver = true;
     if(m_botmode) BotManager.BeginMap(name);
     else kickallbots();
+    if(aibotmode) aibotstartmap(name);
     showmipstats = false;
     clearbounceents();
     preparectf(!(m_flags_ || m_bomb));
@@ -1418,7 +1421,7 @@ void flagmsg(int flag, int message, int actor, int flagtime)
 void dropflag() { tryflagdrop(true); }
 COMMAND(dropflag, "");
 
-char *votestring(int type, const char *arg1, const char *arg2, const char *arg3)
+char *votestring(int type, const char *arg1, const char *arg2, const char *arg3, int botcount = 0, int botskill = 2)
 {
     const char *msgs[] = { "kick player %s, reason: %s", "ban player %s, reason: %s", "remove all bans", "set mastermode to %s", "%s autoteam", "force player %s to team %s", "give admin to player %s", "load map %s in mode %s%s%s", "%s demo recording for the next match", "stop demo recording", "clear all demos", "set server description to '%s'", "shuffle teams", "%s the game" };
     const char *msg = msgs[type];
@@ -1474,6 +1477,12 @@ char *votestring(int type, const char *arg1, const char *arg2, const char *arg3)
             {
                 formatstring(out)(msg, arg1, modestr(n, modeacronyms > 0), "", timestr);
             }
+
+            if(botcount > 0)
+            {
+                static const char *skills[5] = { "best", "good", "medium", "worse", "bad" };
+                concatformatstring(out, " with %d bot%s (%s)", botcount, botcount == 1 ? "" : "s", skills[clamp(botskill, 0, 4)]);
+            }
             break;
         }
         case SA_SERVERDESC:
@@ -1489,14 +1498,16 @@ char *votestring(int type, const char *arg1, const char *arg2, const char *arg3)
     return out;
 }
 
-votedisplayinfo *newvotedisplayinfo(playerent *owner, int type, const char *arg1, const char *arg2, const char *arg3)
+votedisplayinfo *newvotedisplayinfo(playerent *owner, int type, const char *arg1, const char *arg2, const char *arg3, int botcount, int botskill)
 {
     if(type < 0 || type >= SA_NUM) return NULL;
     votedisplayinfo *v = new votedisplayinfo();
     v->owner = owner;
     v->type = type;
+    v->botcount = botcount;
+    v->botskill = botskill;
     v->millis = totalmillis + (30+10)*1000;
-    char *votedesc = votestring(type, arg1, arg2, arg3);
+    char *votedesc = votestring(type, arg1, arg2, arg3, botcount, botskill);
     copystring(v->desc, votedesc);
     DELETEA(votedesc);
     return v;
@@ -1504,10 +1515,10 @@ votedisplayinfo *newvotedisplayinfo(playerent *owner, int type, const char *arg1
 
 votedisplayinfo *curvote = NULL, *calledvote = NULL;
 
-void callvote(int type, const char *arg1, const char *arg2, const char *arg3)
+void callvote(int type, const char *arg1, const char *arg2, const char *arg3, int botcount, int botskill)
 {
     if(calledvote) return;
-    votedisplayinfo *v = newvotedisplayinfo(player1, type, arg1, arg2, arg3);
+    votedisplayinfo *v = newvotedisplayinfo(player1, type, arg1, arg2, arg3, botcount, botskill);
     if(v)
     {
         calledvote = v;
@@ -1525,6 +1536,8 @@ void callvote(int type, const char *arg1, const char *arg2, const char *arg3)
                 sendstring(arg1, p);
                 putint(p, atoi(arg2));
                 putint(p, atoi(arg3));
+                putint(p, botcount);
+                putint(p, botskill);
                 break;
             case SA_SERVERDESC:
                 sendstring(arg1, p);
@@ -1707,11 +1720,26 @@ void gonext(int *arg1)
     sendstring("+1", p);
     putint(p, *arg1);
     putint(p, -1);
+    putint(p, 0);
+    putint(p, 2);
     sendpackettoserv(1, p.finalize());
 }
 COMMAND(gonext, "i");
 
 COMMANDN(callvote, scallvote, "iss"); //fixme,ah
+
+void votemapbots(char *map, int *mode, int *time, int *bots, int *skill)
+{
+    if(!map || !*map) return;
+    if(*bots < 0) *bots = 0;
+    if(*bots > 16) *bots = 16;
+    if(*skill < 0 || *skill > 4) *skill = 2;
+    string m, t;
+    itoa(m, *mode);
+    itoa(t, *time);
+    callvote(SA_MAP, map, m, t, *bots, *skill);
+}
+COMMAND(votemapbots, "siiii");
 COMMANDF(vote, "i", (int *v) { vote(*v); });
 
 void cmd_pause(int* arg1)

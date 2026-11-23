@@ -252,6 +252,7 @@ struct client                   // server side version of "dynent" type
     bool voiceactive; // currently transmitting
     int acversion, acbuildtype;
     bool isauthed; // for passworded servers
+    bool isbot; // server-managed AI client
     bool needsauth;
     bool haswelcome;
     bool voicecapable; // client announced it understands voice chat messages
@@ -327,6 +328,7 @@ struct client                   // server side version of "dynent" type
         position.setsize(0);
         messages.setsize(0);
         isauthed = haswelcome = false;
+        isbot = false;
         role = CR_DEFAULT;
         lastvotecall = 0;
         lastprofileupdate = fastprofileupdates = 0;
@@ -348,6 +350,7 @@ struct client                   // server side version of "dynent" type
         type = ST_EMPTY;
         role = CR_DEFAULT;
         isauthed = haswelcome = false;
+        isbot = false;
     }
 
     bool checkvitadate(int n)
