@@ -1533,7 +1533,21 @@ void gmenu::render()
 void gmenu::renderbg(int x1, int y1, int x2, int y2, bool border)
 {
     static Texture *tex = NULL;
+    static Texture *cstex = NULL;
     if(!tex) tex = textureload("packages/misc/menu.jpg");
+    if(!cstex) cstex = textureload("packages/misc/cs_background.jpg", 3);
+
+    // If on main menu and not connected to an active game server, render full CS 1.6 background wallpaper
+    extern bool connected;
+    if(!connected && name && !strcmp(name, "main") && cstex && cstex != notexture)
+    {
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0, VIRTW * 2, VIRTH * 2, 0, -1, 1);
+        framedquadtexture(cstex->id, 0, 0, VIRTW * 2, VIRTH * 2, 0, 255, false);
+        glPopMatrix();
+    }
+
     static color transparent(1, 1, 1, 0.75f);
     blendbox(x1, y1, x2, y2, border, tex->id, allowinput ? NULL : &transparent);
 }
