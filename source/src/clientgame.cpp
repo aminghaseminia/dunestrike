@@ -662,23 +662,29 @@ void resetsleep(bool force)
 
 COMMANDF(resetsleeps, "", (void) { resetsleep(true); });
 
-// let the bomb carrier know when they are standing on the active site
+// let the bomb carrier know when they are standing on an active site
 static void bombcheck()
 {
-    static bool lastatsite = false;
+    static int lastatsite = -1;
     if(!m_bomb || bombinfo.state != BOMB_LIVE || bombinfo.carrier != player1->clientnum)
     {
-        lastatsite = false;
+        lastatsite = -1;
         return;
     }
-    int site = 1 - bombinfo.attackerteam;
-    bool atsite = false;
-    if(site >= 0 && site < 2 && bombinfo.sites[site].x >= 0)
+    int atsite = -1;
+    loopi(2)
     {
-        float dx = player1->o.x - bombinfo.sites[site].x, dy = player1->o.y - bombinfo.sites[site].y;
-        atsite = dx*dx + dy*dy <= 9.0f; // matches the server's default bomb_siteradius
+        if(bombinfo.sites[i].x >= 0)
+        {
+            float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
+            if(dx*dx + dy*dy <= 9.0f) // matches the server's default bomb_siteradius
+            {
+                atsite = i;
+                break;
+            }
+        }
     }
-    if(atsite && !lastatsite) hudoutf("\f1You are at the bomb site - press F or right-click to plant");
+    if(atsite >= 0 && lastatsite != atsite) hudoutf("\f1You are at Site %c - press F or right-click to plant", atsite == 0 ? 'A' : 'B');
     lastatsite = atsite;
 }
 
@@ -824,7 +830,7 @@ void bombcarrierchanged(int oldcarrier)
     if(!m_bomb || bombinfo.state != BOMB_LIVE) return;
     bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
     if(bombinfo.carrier == player1->clientnum)
-        hudoutf("\f1You have the bomb - plant it at the marked site");
+        hudoutf("\f1You have the bomb - plant at Site A or Site B");
     else if(bombinfo.carrier >= 0 && attacker)
     {
         playerent *newcarrier = getclient(bombinfo.carrier);
@@ -844,12 +850,21 @@ void bombinfochanged(int oldstate)
                 hudoutf("\f3Round %d - \f1%s attack, %s defend", bombinfo.round, team_basestring(bombinfo.attackerteam), team_basestring(team_opposite(bombinfo.attackerteam)));
             break;
         case BOMB_PLANTING:
-            if(bombinfo.actionactor == player1->clientnum) hudoutf("\f3Planting the bomb...");
+            if(bombinfo.actionactor == player1->clientnum)
+            {
+                if(bombinfo.site >= 0 && bombinfo.site < 2)
+                    hudoutf("\f3Planting the bomb at Site %c...", bombinfo.site == 0 ? 'A' : 'B');
+                else
+                    hudoutf("\f3Planting the bomb...");
+            }
             break;
         case BOMB_PLANTED:
             if(oldstate == BOMB_PLANTING || oldstate == BOMB_WAIT)
             {
-                hudoutf("\f1The bomb has been planted!");
+                if(bombinfo.site >= 0 && bombinfo.site < 2)
+                    hudoutf("\f1The bomb has been planted at Site %c!", bombinfo.site == 0 ? 'A' : 'B');
+                else
+                    hudoutf("\f1The bomb has been planted!");
                 audiomgr.playsound(S_FA_BOMBPLANTED, SP_HIGHEST);
             }
             break;

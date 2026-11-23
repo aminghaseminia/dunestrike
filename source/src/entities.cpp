@@ -349,12 +349,14 @@ void renderentities()
     }
     if(m_bomb)
     {
-        int activesite = 1 - bombinfo.attackerteam;
-        if(bombinfo.sites[activesite].x >= 0 && !OUTBORD(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y))
+        loopi(2)
         {
-            float x = bombinfo.sites[activesite].x, y = bombinfo.sites[activesite].y;
-            defformatstring(path)("pickups/flags/%s", activesite ? "RVSF" : "CLA");
-            rendermodel(path, ANIM_FLAG|ANIM_LOOP, 0, 0, vec(x, y, (float)S(int(x), int(y))->floor), 0, 0, 0, 120.0f);
+            if(bombinfo.sites[i].x >= 0 && !OUTBORD(bombinfo.sites[i].x, bombinfo.sites[i].y))
+            {
+                float x = bombinfo.sites[i].x, y = bombinfo.sites[i].y;
+                defformatstring(path)("pickups/flags/%s", i ? "RVSF" : "CLA");
+                rendermodel(path, ANIM_FLAG|ANIM_LOOP, 0, 0, vec(x, y, (float)S(int(x), int(y))->floor), 0, 0, 0, 120.0f);
+            }
         }
         if(bombinfo.pos.x >= 0 && !OUTBORD(bombinfo.pos.x, bombinfo.pos.y) &&
            (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING ||

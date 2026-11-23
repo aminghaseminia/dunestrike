@@ -567,13 +567,13 @@ void drawradar_showmap(playerent *p, int w, int h)
     {
         glColor4f(1.0f, 1.0f, 1.0f, (sinf(lastmillis / 100.0f) + 1.0f) / 2.0f);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        bool attacker = player1->team == TEAM_SPECT || (team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam);
-        int activesite = 1 - bombinfo.attackerteam;
-        if(attacker && activesite >= 0 && activesite < 2 && bombinfo.sites[activesite].x >= 0
-           && !OUTBORD(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y))
+        loopi(2)
         {
-            vec pos = vec(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y, 0).sub(mdd).mul(coordtrans);
-            drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+            if(bombinfo.sites[i].x >= 0 && !OUTBORD(bombinfo.sites[i].x, bombinfo.sites[i].y))
+            {
+                vec pos = vec(bombinfo.sites[i].x, bombinfo.sites[i].y, 0).sub(mdd).mul(coordtrans);
+                drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+            }
         }
         if(bombinfo.pos.x >= 0 && !OUTBORD(bombinfo.pos.x, bombinfo.pos.y)
            && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
@@ -695,15 +695,16 @@ void drawradar_vicinity(playerent *p, int w, int h)
     {
         glColor4f(1.0f, 1.0f, 1.0f, (sinf(lastmillis / 100.0f) + 1.0f) / 2.0f);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        bool attacker = player1->team == TEAM_SPECT || (team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam);
-        int activesite = 1 - bombinfo.attackerteam;
-        if(attacker && activesite >= 0 && activesite < 2 && bombinfo.sites[activesite].x >= 0)
+        loopi(2)
         {
-            vec pos = vec(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y, 0).sub(d->o);
-            if(pos.sqrxy() < d2s)
+            if(bombinfo.sites[i].x >= 0)
             {
-                pos.mul(scaled);
-                drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+                vec pos = vec(bombinfo.sites[i].x, bombinfo.sites[i].y, 0).sub(d->o);
+                if(pos.sqrxy() < d2s)
+                {
+                    pos.mul(scaled);
+                    drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+                }
             }
         }
         if(bombinfo.pos.x >= 0 && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
@@ -1140,22 +1141,36 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             int pct = bombinfo.actionduration > 0 ? 100 - (remaining * 100 / bombinfo.actionduration) : 0;
             if(pct < 0) pct = 0;
             else if(pct > 100) pct = 100;
-            defformatstring(actionline)("\f3%s %d%%", bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING", pct);
+            defformatstring(actionline)("\f3%s%s %d%%",
+                bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING",
+                (bombinfo.state == BOMB_PLANTING && bombinfo.site >= 0 && bombinfo.site < 2) ? (bombinfo.site == 0 ? " AT SITE A" : " AT SITE B") : "",
+                pct);
             draw_text(actionline, (VIRTW*2 - text_width(actionline))/2, y + 3*FONTH, 255, 255, 255);
         }
 
         const char *hint = NULL;
+        string hintbuf;
         bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
         if(bombinfo.state == BOMB_LIVE && bombinfo.carrier == player1->clientnum)
         {
-            bool atsite = false;
-            int activesite = 1 - bombinfo.attackerteam;
-            if(bombinfo.sites[activesite].x >= 0)
+            int atsite = -1;
+            loopi(2)
             {
-                float dx = player1->o.x - bombinfo.sites[activesite].x, dy = player1->o.y - bombinfo.sites[activesite].y;
-                if(dx*dx + dy*dy <= 9.0f) atsite = true;
+                if(bombinfo.sites[i].x >= 0)
+                {
+                    float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
+                    if(dx*dx + dy*dy <= 9.0f) { atsite = i; break; }
+                }
             }
-            hint = atsite ? "\f1press F or right-click to plant the bomb" : "\f1YOU HAVE THE BOMB - go to the marked site";
+            if(atsite >= 0)
+            {
+                formatstring(hintbuf)("\f1press F or right-click to plant at Site %c", atsite == 0 ? 'A' : 'B');
+                hint = hintbuf;
+            }
+            else
+            {
+                hint = "\f1YOU HAVE THE BOMB - plant at Site A or Site B";
+            }
         }
         else if(bombinfo.state == BOMB_PLANTED && team_isactive(player1->team) && team_base(player1->team) != bombinfo.attackerteam)
         {

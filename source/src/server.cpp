@@ -1753,10 +1753,13 @@ SERVPAR(bomb_explodedamage, 0, 200, 1000, "DDamage at the centre of the bomb exp
 
 static int bombsiteat(const vec &o)
 {
-    int site = 1 - sg->bomb.attackerteam; // defenders' flag base is the active site
-    if(site < 0 || site > 1 || sg->bomb.sites[site][0] < 0) return -1;
-    float dx = o.x - sg->bomb.sites[site][0], dy = o.y - sg->bomb.sites[site][1];
-    return dx*dx + dy*dy <= float(bomb_siteradius) * bomb_siteradius ? site : -1;
+    loopi(2)
+    {
+        if(sg->bomb.sites[i][0] < 0) continue;
+        float dx = o.x - sg->bomb.sites[i][0], dy = o.y - sg->bomb.sites[i][1];
+        if(dx*dx + dy*dy <= float(bomb_siteradius) * bomb_siteradius) return i;
+    }
+    return -1;
 }
 
 static bool bombdistok(const vec &o)
@@ -2050,7 +2053,8 @@ void bombaction(client *cl)
         b.pos[1] = (int)cl->state.o.y;
         b.pos[2] = (int)cl->state.o.z;
         sendbombinfo();
-        sendservmsg("\f3The bomb is being planted");
+        defformatstring(msg)("\f3The bomb is being planted at Site %c", site == 0 ? 'A' : 'B');
+        sendservmsg(msg);
     }
     else if(b.state == BOMB_PLANTED && team_isactive(cl->team) && team_base(cl->team) != b.attackerteam && bombdistok(cl->state.o))
     {
@@ -2141,8 +2145,9 @@ void bomb_update()
                 b.actionactor = -1;
                 b.actionend = b.actionstart = b.actionduration = 0;
                 sendbombinfo();
-                sendservmsg("\f3The bomb has been planted!");
-                mlog(DSLOG_INFO, "bomb planted at site %d", b.site);
+                defformatstring(msg)("\f3The bomb has been planted at Site %c!", b.site == 0 ? 'A' : 'B');
+                sendservmsg(msg);
+                mlog(DSLOG_INFO, "bomb planted at site %d (%c)", b.site, b.site == 0 ? 'A' : 'B');
             }
             break;
         }
