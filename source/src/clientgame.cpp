@@ -2066,18 +2066,22 @@ static void hitzoneselftestfn()
 
     d->o = so; d->head = shead; d->yaw = syaw; d->pitch = spitch; d->eyeheight = seye; d->radius = srad;
 
-    // multipliers
-    if(hitzonescale(HITZONE_HEAD) != 3.0f || hitzonescale(HITZONE_STOMACH) != 0.9f || hitzonescale(HITZONE_LEGS) != 0.75f
-       || hitzonescale(HITZONE_ARMS) != 0.7f || hitzonescale(HITZONE_TORSO) != 1.0f) { failures++; conoutf("hitzone FAIL scale"); }
+    // multipliers: Head (4.0x), Stomach (1.25x), Torso (1.0x), Legs (0.75x), Arms (0.75x)
+    if(hitzonescale(HITZONE_HEAD) != 4.0f || hitzonescale(HITZONE_STOMACH) != 1.25f || hitzonescale(HITZONE_LEGS) != 0.75f
+       || hitzonescale(HITZONE_ARMS) != 0.75f || hitzonescale(HITZONE_TORSO) != 1.0f) { failures++; conoutf("hitzone FAIL scale"); }
 
-    // armour applies to the chest but not the head
+    // armour applies to head and body via piercing calculation:
+    // Carbine has 70% piercing. For damage = 60:
+    // health_dmg = ceil(60 * 0.70) = 42.
+    // armor_absorb = 60 - 42 = 18.
+    // armor_dmg = ceil(18 * 0.5) = 9.
     playerstate ps;
     ps.health = 100; ps.armour = 100;
     int dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
-    if(dmg != 60 || ps.health != 40 || ps.armour != 100) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
+    if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
     ps.health = 100; ps.armour = 100;
     dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_TORSO);
-    if(dmg != 46 || ps.health != 54 || ps.armour != 76) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
+    if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
     ps.health = 100; ps.armour = 100;
     dmg = ps.dodamage(INT_MAX, GUN_KNIFE, HITZONE_TORSO);
     if(dmg != 100 || ps.health != 0 || ps.armour != 0) { failures++; conoutf("hitzone FAIL suicide"); }

@@ -95,14 +95,15 @@ enum
 };
 
 // damage multiplier per hit zone, shared by client prediction and the server
+// Calibrated to CS hitzone multipliers: Head (4.0x), Stomach (1.25x), Torso/Chest (1.0x), Arms/Legs (0.75x)
 static inline float hitzonescale(int zone)
 {
     switch(zone)
     {
-        case HITZONE_HEAD:    return 3.0f;
-        case HITZONE_STOMACH: return 0.9f;
+        case HITZONE_HEAD:    return 4.0f;
+        case HITZONE_STOMACH: return 1.25f;
         case HITZONE_LEGS:    return 0.75f;
-        case HITZONE_ARMS:    return 0.7f;
+        case HITZONE_ARMS:    return 0.75f;
         case HITZONE_TORSO:
         default:              return 1.0f;
     }
@@ -429,10 +430,9 @@ public:
         }
     }
 
-    // just subtract damage here, can set death, etc. later in code calling this
+    // CS-style damage calculation with armor penetration & helmet protection
     int dodamage(int damage, int gun, int zone = HITZONE_TORSO)
     {
-        guninfo gi = guns[gun];
         if(damage == INT_MAX)
         {
             damage = health;
@@ -440,36 +440,38 @@ public:
             return damage;
         }
 
-        // armour is a vest: it does not protect the head
-        if(zone == HITZONE_HEAD)
+        guninfo gi = valid_weapon(gun) ? guns[gun] : guns[GUN_PISTOL];
+
+        // Headshots without armor/helmet take unmitigated head damage
+        if(zone == HITZONE_HEAD && armour <= 0)
         {
             health -= damage;
             return damage;
         }
 
-        // 4-level armour - tiered approach: 16%, 33%, 37%, 41%
-        // Please update ./ac_website/htdocs/docs/introduction.html if this changes.
-        int armoursection = 0;
-        int ad = damage;
-        if(armour > 25) armoursection = 1;
-        if(armour > 50) armoursection = 2;
-        if(armour > 75) armoursection = 3;
-        switch(armoursection)
+        // Armor mitigation:
+        // In CS, armor penetration (gi.piercing) represents % of damage penetrating armor to health.
+        // e.g., 77.5% piercing means 77.5% damage goes to health, 22.5% absorbed by armor.
+        // Armor durability depleted = (damage absorbed) / 2.
+        if(armour > 0)
         {
-            case 0: ad = (int) (16.0f/25.0f * armour); break;             // 16
-            case 1: ad = (int) (17.0f/25.0f * armour) - 1; break;         // 33
-            case 2: ad = (int) (4.0f/25.0f * armour) + 25; break;         // 37
-            case 3: ad = (int) (4.0f/25.0f * armour) + 25; break;         // 41
-            default: break;
+            float pen = clamp(float(gi.piercing) / 100.0f, 0.0f, 1.0f);
+            int health_dmg = (int)ceil(damage * pen);
+            int armor_absorb = damage - health_dmg;
+            int armor_dmg = max(1, (int)ceil(armor_absorb * 0.5f));
+
+            if(armour >= armor_dmg)
+            {
+                armour -= armor_dmg;
+                damage = health_dmg;
+            }
+            else
+            {
+                // Armor exhausted during this hit
+                damage = health_dmg + (armor_dmg - armour) * 2;
+                armour = 0;
+            }
         }
-
-        //ra - reduced armor
-        //rd - reduced damage
-        int ra = (int) (ad * damage/100.0f);
-        int rd = ra-(ra*(gi.piercing/100.0f)); //Who cares about rounding errors anyways?
-
-        armour -= ra;
-        damage -= rd;
 
         health -= damage;
         return damage;

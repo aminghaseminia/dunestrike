@@ -536,15 +536,15 @@ uchar entscale[MAXENTTYPES][7] =
 // Please update ./ac_website/htdocs/docs/introduction.html if these figures change.
 itemstat ammostats[NUMGUNS] =
 {
-    {  1,  1,   1,  S_ITEMAMMO  },   // knife dummy
-    { 20, 60, 100,  S_ITEMAMMO  },   // pistol
-    { 15, 30,  30,  S_ITEMAMMO  },   // carbine
-    { 14, 28,  21,  S_ITEMAMMO  },   // shotgun
-    { 60, 90,  90,  S_ITEMAMMO  },   // subgun
-    { 10, 20,  15,  S_ITEMAMMO  },   // sniper
-    { 40, 60,  60,  S_ITEMAMMO  },   // assault
-    {  1,  0,   3,  S_ITEMAMMO  },   // grenade
-    {100,  0, 100,  S_ITEMAKIMBO}    // akimbo
+    {  1,   1,   1,  S_ITEMAMMO  },   // knife dummy
+    { 24,  48,  60,  S_ITEMAMMO  },   // pistol (12/mag, start 48)
+    { 30,  90,  90,  S_ITEMAMMO  },   // carbine (30/mag, start 90)
+    { 16,  32,  32,  S_ITEMAMMO  },   // shotgun (8/mag, start 32)
+    { 30, 120, 120,  S_ITEMAMMO  },   // subgun (30/mag, start 120)
+    { 10,  30,  30,  S_ITEMAMMO  },   // sniper (10/mag, start 30)
+    { 30,  90,  90,  S_ITEMAMMO  },   // assault (30/mag, start 90)
+    {  1,   1,   2,  S_ITEMAMMO  },   // grenade (1/mag, start 1)
+    { 30, 120, 120,  S_ITEMAKIMBO}    // akimbo (30/mag, start 120)
 };
 
 itemstat powerupstats[I_ARMOUR-I_HEALTH+1] =
@@ -556,21 +556,27 @@ itemstat powerupstats[I_ARMOUR-I_HEALTH+1] =
 
 guninfo guns[NUMGUNS] =
 {
-    // Please update ./ac_website/htdocs/docs/introduction.html if these figures change.
-    //mKR: mdl_kick_rot && mKB: mdl_kick_back
-    //reI: recoilincrease && reB: recoilbase && reM: maxrecoil && reF: recoilbackfade
-    //pFX: pushfactor
+    // CS 1.6 / CS2 calibrated arsenal:
+    // Knife: 50 base dmg, 85% piercing (light slash)
+    // Pistol (USP/Glock equivalent): 30 base dmg, 50% piercing, mag 12
+    // Carbine (M4A1 equivalent): 33 base dmg, 70% piercing, mag 30, attackdelay 90ms (666 RPM)
+    // Shotgun (M3 / XM1014 equivalent): 10 pellets x 20 base dmg, 50% piercing, mag 8
+    // Subgun (MP5 equivalent): 26 base dmg, 50% piercing, mag 30, attackdelay 75ms (800 RPM)
+    // Sniper (AWP equivalent): 115 base dmg, 97% piercing, mag 10, attackdelay 1400ms (1-hit kill torso)
+    // Assault (AK-47 equivalent): 36 base dmg, 77.5% piercing, mag 30, attackdelay 100ms (600 RPM, 1-tap headshot 144 dmg vs helmet ~112 dmg)
+    // Grenade (HE Grenade): 100 base dmg, 60% piercing, mag 1
+    // Akimbo (Dual Elites): 30 base dmg, 52% piercing, mag 30 (15x2), attackdelay 80ms
     //modelname                 sound                reloadtime        damage    projspeed  spread     magsize    mKB      reB          reF        isauto
     //             title                      reload       attackdelay      piercing     part     recoil       mKR     reI        reM        pFX
-    { "knife",   "Knife",        S_KNIFE,   S_NULL,     0,      500,    50, 100,     0,   0,  1,    1,   1,    0,  0,   0,   0,    0,    0,   1,   false },
-    { "pistol",  "Pistol",       S_PISTOL,  S_RPISTOL,  1400,   160,    18,   0,     0,   0, 53,   10,   10,   6,  5,   6,  35,   58,   125,  1,   false },
-    { "carbine", "TMP-M&A CB",   S_CARBINE, S_RCARBINE, 1800,   720,    60,  40,     0,   0, 10,   60,   10,   4,  4,  10,  60,   60,   150,  1,   false },
-    { "shotgun", "V-19 CS",      S_SHOTGUN, S_RSHOTGUN, 2400,   880,    1,    0,     0,   0,  1,   35,    7,   9,  9,  10, 140,  140,   125,  1,   false },   // CAUTION dmg only sane for server!
-    { "subgun",  "A-ARD/10 SMG", S_SUBGUN,  S_RSUBGUN,  1650,   80,     16,   0,     0,   0, 45,   15,   30,   1,  2,   5,  25,   50,   188,  1,   true  },
-    { "sniper",  "AD-81 SR",     S_SNIPER,  S_RSNIPER,  1950,   1500,   82,  25,     0,   0, 50,   50,    5,   4,  4,  10,  85,   85,   100,  1,   false },
-    { "assault", "MTP-57 AR",    S_ASSAULT, S_RASSAULT, 2000,   120,    22,   0,     0,   0, 18,   30,   20,   0,  2,   3,  25,   50,   115,  1,   true  },
-    { "grenade", "Grenades",     S_NULL,    S_NULL,     1000,   650,    200,  0,    20,   6,  1,    1,   1,    3,  1,   0,   0,    0,    0,   3,   false },
-    { "pistol",  "Akimbo",       S_PISTOL,  S_RAKIMBO,  1400,   80,     18,   0,     0,   0, 50,   10,   20,   6,  5,   4,  15,   25,   115,  1,   true  },
+    { "knife",   "Knife",        S_KNIFE,   S_NULL,     0,      500,    50,  85,     0,   0,  1,    1,   1,    0,  0,   0,   0,    0,    0,   1,   false },
+    { "pistol",  "Pistol",       S_PISTOL,  S_RPISTOL,  1400,   150,    30,  50,     0,   0, 35,   10,   12,   6,  5,   6,  30,   50,   125,  1,   false },
+    { "carbine", "TMP-M&A CB",   S_CARBINE, S_RCARBINE, 1800,    90,    33,  70,     0,   0, 15,   35,   30,   4,  4,   8,  40,   60,   130,  1,   true  },
+    { "shotgun", "V-19 CS",      S_SHOTGUN, S_RSHOTGUN, 2400,   880,    20,  50,     0,   0,  1,   35,    8,   9,  9,  10, 140,  140,   125,  1,   false },
+    { "subgun",  "A-ARD/10 SMG", S_SUBGUN,  S_RSUBGUN,  1650,    75,    26,  50,     0,   0, 30,   20,   30,   1,  2,   4,  20,   40,   180,  1,   true  },
+    { "sniper",  "AD-81 SR",     S_SNIPER,  S_RSNIPER,  1950,   1400,   115, 97,     0,   0,  5,   80,   10,   4,  4,  10,  85,   85,   100,  1,   false },
+    { "assault", "MTP-57 AR",    S_ASSAULT, S_RASSAULT, 2000,   100,    36,  78,     0,   0, 16,   40,   30,   0,  2,   5,  35,   65,   115,  1,   true  },
+    { "grenade", "Grenades",     S_NULL,    S_NULL,     1000,   650,    100, 60,    20,   6,  1,    1,    1,   3,  1,   0,   0,    0,    0,   3,   false },
+    { "pistol",  "Akimbo",       S_PISTOL,  S_RAKIMBO,  1400,    80,    30,  52,     0,   0, 40,   12,   30,   6,  5,   4,  15,   25,   115,  1,   true  },
 };
 
 const char *gunnames[NUMGUNS + 1];
