@@ -1367,6 +1367,12 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
 
         if(p->state == CS_ALIVE && !hidehudequipment)
         {
+            if(p == player1 && !intermission && can_buy(p))
+            {
+                int secs_left = max(0, (10000 - (lastmillis - p->lastspawn) + 999) / 1000);
+                defformatstring(buyinfo)("\f0[BUY ZONE: Press B (%ds)]", secs_left);
+                draw_text(buyinfo, 48, 760);
+            }
             pushfont("huddigits");
             draw_textf("%d", HUDPOS_HEALTH + HUDPOS_NUMBERSPACING, 823, p->health);
             if(p->armour) draw_textf("%d", HUDPOS_ARMOUR + HUDPOS_NUMBERSPACING, 823, p->armour);

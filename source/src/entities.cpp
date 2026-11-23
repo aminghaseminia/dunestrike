@@ -531,6 +531,14 @@ void setpickupspawn(int i, bool on)
 
 SVARFP(nextprimary, guns[GUN_ASSAULT].modelname,
 {
+    if(m_valid(gamemode) && !editmode && !can_buy(player1))
+    {
+        if(lastmillis - player1->lastspawn > 10000)
+            conoutf("\f310 seconds have passed. You cannot select weapons now.");
+        else
+            conoutf("\f3You are not in a buy zone.");
+        return;
+    }
     int n = getlistindex(nextprimary, gunnames, true, -1);
     switch(n)
     {

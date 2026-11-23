@@ -79,6 +79,17 @@ COMMAND(closemenu, "s");
 
 void showmenu_(const char *name)
 {
+    if(name && !strcasecmp(name, "Weapons") && m_valid(gamemode) && !editmode)
+    {
+        if(!can_buy(player1))
+        {
+            if(lastmillis - player1->lastspawn > 10000)
+                hudoutf("\f310 seconds have passed. You cannot buy weapons now.");
+            else
+                hudoutf("\f3You are not in a buy zone.");
+            return;
+        }
+    }
     showmenu(name, true);
 }
 COMMANDN(showmenu, showmenu_, "s");
