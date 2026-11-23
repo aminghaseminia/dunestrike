@@ -16,6 +16,7 @@ clang++ -O2 -Wall "$DIR/test_halftime_match.cpp" -o "$DIR/test_halftime_match"
 clang++ -O2 -Wall "$DIR/test_gunplay_movement.cpp" -o "$DIR/test_gunplay_movement"
 clang++ -O2 -Wall "$DIR/test_tagging_movement.cpp" -o "$DIR/test_tagging_movement"
 clang++ -O2 -Wall "$DIR/test_weapon_damage_model.cpp" -o "$DIR/test_weapon_damage_model"
+clang++ -O2 -Wall "$DIR/test_bomb_audio_tempo.cpp" -o "$DIR/test_bomb_audio_tempo"
 
 # 2. Run unit tests
 echo "[RUN] Running test_bombsite..."
@@ -35,6 +36,9 @@ echo "[RUN] Running test_tagging_movement..."
 
 echo "[RUN] Running test_weapon_damage_model..."
 "$DIR/test_weapon_damage_model"
+
+echo "[RUN] Running test_bomb_audio_tempo..."
+"$DIR/test_bomb_audio_tempo"
 
 echo ""
 echo "========================================"

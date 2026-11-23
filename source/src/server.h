@@ -701,6 +701,9 @@ soundcfgitem soundcfg[S_NULL] =
     { "voicecom/fa_spotted",      "Persian: enemy spotted",  0, 0,  0, S_FA_SPOTTED,             C(VOICECOM)|C(OTHER) },
     { "voicecom/fa_bomb_planted", "Persian: bomb planted",   0, 0,  0, S_FA_BOMBPLANTED,         C(VOICECOM)|C(OTHER) },
     { "voicecom/fa_defusing",     "Persian: defusing",       0, 0,  0, S_FA_DEFUSING,            C(VOICECOM)|C(OTHER) },
-    { "voicecom/fa_defused",      "Persian: defused",        0, 0,  0, S_FA_DEFUSED,             C(VOICECOM)|C(OTHER) }
+    { "voicecom/fa_defused",      "Persian: defused",        0, 0,  0, S_FA_DEFUSED,             C(VOICECOM)|C(OTHER) },
+    { "weapons/c4_beep",          "C4 Beep",                 0, 0,  0, S_C4_BEEP,                C(OTHER) },
+    { "weapons/c4_plant",         "C4 Plant",                0, 0,  0, S_C4_PLANT,               C(OTHER) },
+    { "weapons/c4_disarm",        "C4 Disarm",               0, 0,  0, S_C4_DISARM,              C(OTHER) }
 };
 #undef C

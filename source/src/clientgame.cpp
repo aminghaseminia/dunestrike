@@ -662,30 +662,68 @@ void resetsleep(bool force)
 
 COMMANDF(resetsleeps, "", (void) { resetsleep(true); });
 
-// let the bomb carrier know when they are standing on an active site
+// let the bomb carrier know when they are standing on an active site, and drive C4 dynamic beeping
 static void bombcheck()
 {
     static int lastatsite = -1;
-    if(!m_bomb || bombinfo.state != BOMB_LIVE || bombinfo.carrier != player1->clientnum)
+    static int lastbeepmillis = 0;
+
+    if(!m_bomb)
     {
         lastatsite = -1;
+        lastbeepmillis = 0;
         return;
     }
-    int atsite = -1;
-    loopi(2)
+
+    if(bombinfo.state == BOMB_LIVE && bombinfo.carrier == player1->clientnum)
     {
-        if(bombinfo.sites[i].x >= 0)
+        int atsite = -1;
+        loopi(2)
         {
-            float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
-            if(dx*dx + dy*dy <= 9.0f) // matches the server's default bomb_siteradius
+            if(bombinfo.sites[i].x >= 0)
             {
-                atsite = i;
-                break;
+                float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
+                if(dx*dx + dy*dy <= 9.0f) // matches the server's default bomb_siteradius
+                {
+                    atsite = i;
+                    break;
+                }
+            }
+        }
+        if(atsite >= 0 && lastatsite != atsite) hudoutf("\f1You are at Site %c - press F or right-click to plant", atsite == 0 ? 'A' : 'B');
+        lastatsite = atsite;
+    }
+    else
+    {
+        lastatsite = -1;
+    }
+
+    // Dynamic CS C4 audio: progressive beep tempo as detonation approaches
+    if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
+    {
+        int elapsed = lastmillis - bombinfo.updatetime;
+        int remaining = max(0, bombinfo.timeremaining - elapsed);
+
+        if(remaining > 0)
+        {
+            int beep_interval = 1000; // default 1.0s (30-40s left)
+            if(remaining <= 2000) beep_interval = 125;        // Final 2s: urgent panic beeping (8 beeps/sec)
+            else if(remaining <= 5000) beep_interval = 250;   // 2-5s left: very fast (4 beeps/sec)
+            else if(remaining <= 10000) beep_interval = 350;  // 5-10s left: fast (under defuse wire)
+            else if(remaining <= 20000) beep_interval = 500;  // 10-20s left: moderate (2 beeps/sec)
+            else if(remaining <= 30000) beep_interval = 750;  // 20-30s left: quickening
+
+            if(lastmillis - lastbeepmillis >= beep_interval)
+            {
+                audiomgr.playsound(S_C4_BEEP, &bombinfo.pos, SP_HIGH);
+                lastbeepmillis = lastmillis;
             }
         }
     }
-    if(atsite >= 0 && lastatsite != atsite) hudoutf("\f1You are at Site %c - press F or right-click to plant", atsite == 0 ? 'A' : 'B');
-    lastatsite = atsite;
+    else
+    {
+        lastbeepmillis = 0;
+    }
 }
 
 void updateworld(int curtime, int lastmillis)        // main game update loop
@@ -866,6 +904,7 @@ void bombinfochanged(int oldstate)
                 else
                     hudoutf("\f1The bomb has been planted!");
                 audiomgr.playsound(S_FA_BOMBPLANTED, SP_HIGHEST);
+                audiomgr.playsound(S_C4_PLANT, &bombinfo.pos, SP_HIGH);
             }
             break;
         case BOMB_DEFUSING:
@@ -873,6 +912,7 @@ void bombinfochanged(int oldstate)
             {
                 hudoutf(bombinfo.actionactor == player1->clientnum ? "\f3Defusing the bomb..." : "\f1The bomb is being defused!");
                 audiomgr.playsound(S_FA_DEFUSING, SP_HIGHEST);
+                audiomgr.playsound(S_C4_DISARM, &bombinfo.pos, SP_HIGH);
             }
             break;
         case BOMB_END:
