@@ -44,5 +44,7 @@ def test_map_flags(cgz_path):
     return flags
 
 if __name__ == "__main__":
-    flags = test_map_flags("/home/najm-pc20/dunestrike/packages/maps/official/cs_dust2.cgz")
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    flags = test_map_flags(str(root / "packages/maps/official/cs_dust2.cgz"))
     print("Dual sites on cs_dust2 verified!")

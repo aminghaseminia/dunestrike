@@ -8,6 +8,8 @@
 #include <fstream>
 #include <vector>
 
+#include "test_paths.h"
+
 struct vec2 {
     float x, y;
     vec2(float _x = 0, float _y = 0) : x(_x), y(_y) {}
@@ -155,7 +157,7 @@ void test_planted_bomb_hud_cues() {
 void test_source_code_integrity() {
     std::cout << "[Test 5] Checking source code implementation in renderhud.cpp and console.cpp...\n";
 
-    std::ifstream hudfile("/home/najm-pc20/dunestrike/source/src/renderhud.cpp");
+    std::ifstream hudfile(ds_path("source/src/renderhud.cpp"));
     assert(hudfile.is_open());
     std::string hudcontent((std::istreambuf_iterator<char>(hudfile)), std::istreambuf_iterator<char>());
 
@@ -165,7 +167,7 @@ void test_source_code_integrity() {
     assert(hudcontent.find("C4 PLANTED [%s]") != std::string::npos);
     assert(hudcontent.find("%s AT %s (%d%%)") != std::string::npos);
 
-    std::ifstream confile("/home/najm-pc20/dunestrike/source/src/console.cpp");
+    std::ifstream confile(ds_path("source/src/console.cpp"));
     assert(confile.is_open());
     std::string concontent((std::istreambuf_iterator<char>(confile)), std::istreambuf_iterator<char>());
 

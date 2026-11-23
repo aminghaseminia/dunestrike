@@ -5,6 +5,8 @@
 #include <iostream>
 #include <vector>
 
+#include "test_paths.h"
+
 int calculate_beep_interval(int remaining_millis) {
     if (remaining_millis <= 0) return 0;
     if (remaining_millis <= 2000) return 125;        // Final 2s: urgent panic beeping (8 beeps/sec)
@@ -89,15 +91,15 @@ void test_cadence_acceleration() {
 void test_c4_sound_events() {
     std::cout << "[Test 3] Verifying C4 plant, disarm, and defuse sound mappings...\n";
     // Check that custom sounds exist and are non-empty
-    FILE *f1 = fopen("/home/najm-pc20/dunestrike/packages/audio/weapons/c4_beep.ogg", "rb");
+    FILE *f1 = fopen(ds_path("packages/audio/weapons/c4_beep.ogg").c_str(), "rb");
     assert(f1 != NULL);
     fclose(f1);
 
-    FILE *f2 = fopen("/home/najm-pc20/dunestrike/packages/audio/weapons/c4_plant.ogg", "rb");
+    FILE *f2 = fopen(ds_path("packages/audio/weapons/c4_plant.ogg").c_str(), "rb");
     assert(f2 != NULL);
     fclose(f2);
 
-    FILE *f3 = fopen("/home/najm-pc20/dunestrike/packages/audio/weapons/c4_disarm.ogg", "rb");
+    FILE *f3 = fopen(ds_path("packages/audio/weapons/c4_disarm.ogg").c_str(), "rb");
     assert(f3 != NULL);
     fclose(f3);
 

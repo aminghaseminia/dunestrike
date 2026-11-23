@@ -8,25 +8,27 @@
 #include <vector>
 #include <cmath>
 
+#include "test_paths.h"
+
 struct RGB {
     int r, g, b;
 };
 
 void test_texture_files_exist() {
     std::cout << "[Test 1] Verifying all CS 1.6 CT and T faction textures on disk...\n";
-    const char *ct_files[] = {
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/01.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/01_bluevest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/02.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/02_bluevest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/03.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/03_bluevest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/04.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/04_bluevest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/RVSF/blue.jpg"
+    const std::string ct_files[] = {
+        ds_path("packages/models/playermodels/RVSF/01.jpg"),
+        ds_path("packages/models/playermodels/RVSF/01_bluevest.jpg"),
+        ds_path("packages/models/playermodels/RVSF/02.jpg"),
+        ds_path("packages/models/playermodels/RVSF/02_bluevest.jpg"),
+        ds_path("packages/models/playermodels/RVSF/03.jpg"),
+        ds_path("packages/models/playermodels/RVSF/03_bluevest.jpg"),
+        ds_path("packages/models/playermodels/RVSF/04.jpg"),
+        ds_path("packages/models/playermodels/RVSF/04_bluevest.jpg"),
+        ds_path("packages/models/playermodels/RVSF/blue.jpg")
     };
-    for(const char *path : ct_files) {
-        FILE *f = fopen(path, "rb");
+    for(const std::string &path : ct_files) {
+        FILE *f = fopen(path.c_str(), "rb");
         assert(f != NULL);
         fseek(f, 0, SEEK_END);
         long sz = ftell(f);
@@ -34,19 +36,19 @@ void test_texture_files_exist() {
         assert(sz > 5000); // Valid JPEG
     }
 
-    const char *t_files[] = {
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/01.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/01_redvest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/02.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/02_redvest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/03.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/03_redvest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/04.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/04_redvest.jpg",
-        "/home/najm-pc20/dunestrike/packages/models/playermodels/CLA/red.jpg"
+    const std::string t_files[] = {
+        ds_path("packages/models/playermodels/CLA/01.jpg"),
+        ds_path("packages/models/playermodels/CLA/01_redvest.jpg"),
+        ds_path("packages/models/playermodels/CLA/02.jpg"),
+        ds_path("packages/models/playermodels/CLA/02_redvest.jpg"),
+        ds_path("packages/models/playermodels/CLA/03.jpg"),
+        ds_path("packages/models/playermodels/CLA/03_redvest.jpg"),
+        ds_path("packages/models/playermodels/CLA/04.jpg"),
+        ds_path("packages/models/playermodels/CLA/04_redvest.jpg"),
+        ds_path("packages/models/playermodels/CLA/red.jpg")
     };
-    for(const char *path : t_files) {
-        FILE *f = fopen(path, "rb");
+    for(const std::string &path : t_files) {
+        FILE *f = fopen(path.c_str(), "rb");
         assert(f != NULL);
         fseek(f, 0, SEEK_END);
         long sz = ftell(f);
@@ -76,7 +78,7 @@ void test_skin_selection_bounds() {
 
 void test_menu_faction_names() {
     std::cout << "[Test 3] Verifying CS 1.6 faction labels in menus_settings.cfg...\n";
-    std::ifstream infile("/home/najm-pc20/dunestrike/config/menus_settings.cfg");
+    std::ifstream infile(ds_path("config/menus_settings.cfg"));
     assert(infile.is_open());
 
     std::string content((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());

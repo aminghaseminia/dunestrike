@@ -6,10 +6,12 @@
 #include <fstream>
 #include <string>
 
+#include "test_paths.h"
+
 void test_bot_ai_source_has_no_voice_callouts() {
     std::cout << "[Test 1] Verifying bot_ai.cpp contains zero voice/audio callouts...\n";
 
-    std::ifstream file("../source/src/bot/bot_ai.cpp");
+    std::ifstream file(ds_path("source/src/bot/bot_ai.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -30,19 +32,19 @@ void test_bot_ai_source_has_no_voice_callouts() {
 void test_all_bot_files_have_no_voice() {
     std::cout << "[Test 2] Verifying entire source/src/bot/ has zero voicecom or radio emissions...\n";
 
-    const char* bot_files[] = {
-        "../source/src/bot/bot.cpp",
-        "../source/src/bot/bot_ai.cpp",
-        "../source/src/bot/botmanager.cpp",
-        "../source/src/bot/bot_util.cpp",
-        "../source/src/bot/bot_waypoint.cpp",
-        "../source/src/bot/ds_bot.cpp",
-        "../source/src/bot/ds_bot_ai.cpp"
+    const std::string bot_files[] = {
+        ds_path("source/src/bot/bot.cpp"),
+        ds_path("source/src/bot/bot_ai.cpp"),
+        ds_path("source/src/bot/botmanager.cpp"),
+        ds_path("source/src/bot/bot_util.cpp"),
+        ds_path("source/src/bot/bot_waypoint.cpp"),
+        ds_path("source/src/bot/ds_bot.cpp"),
+        ds_path("source/src/bot/ds_bot_ai.cpp")
     };
 
-    for(const char* filepath : bot_files) {
+    for(const std::string &filepath : bot_files) {
         std::ifstream file(filepath);
-        if(!file.is_open()) continue;
+        assert(file.is_open());
         std::string line;
         while(std::getline(file, line)) {
             assert(line.find("audiomgr.playsound") == std::string::npos);
