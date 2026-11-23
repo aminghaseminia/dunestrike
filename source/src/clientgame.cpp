@@ -1020,6 +1020,44 @@ void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bo
     if(pl->state != CS_ALIVE || intermission || ispaused) return;
     pl->lastpain = lastmillis;
     if(zone == HITZONE_LEGS) pl->limpuntil = lastmillis + LIMPMILLIS;
+
+    // CS Tagging: bullet or knife impact applies immediate momentum reduction and recovery slow
+    if(gun != GUN_GRENADE)
+    {
+        float tagmult = TAG_MEDIUM;
+        switch(gun)
+        {
+            case GUN_SNIPER:
+            case GUN_ASSAULT:
+            case GUN_SHOTGUN:
+                tagmult = TAG_HEAVY;
+                break;
+            case GUN_PISTOL:
+            case GUN_AKIMBO:
+                tagmult = TAG_LIGHT;
+                break;
+            default:
+                tagmult = TAG_MEDIUM;
+                break;
+        }
+
+        // Apply instant velocity cut
+        pl->vel.x *= tagmult;
+        pl->vel.y *= tagmult;
+
+        // Airborne tagging: stop mid-air surfing/bunny-hopping and arrest upward vertical momentum
+        if(!pl->onfloor)
+        {
+            pl->vel.x *= 0.7f;
+            pl->vel.y *= 0.7f;
+            if(pl->vel.z > 0.0f) pl->vel.z = -0.1f;
+        }
+
+        // Set tagging recovery window
+        pl->taguntil = lastmillis + TAGMILLIS;
+        pl->tagscale = tagmult;
+    }
+
     playerent *h = player1->isspectating() && player1->followplayercn >= 0 && (player1->spectatemode == SM_FOLLOW1ST || player1->spectatemode == SM_FOLLOW3RD || player1->spectatemode == SM_FOLLOW3RD_TRANSPARENT) ? getclient(player1->followplayercn) : NULL;
     if(!h) h = player1;
     exechook(HOOK_SP, "onHit", "%d %d %d %d %d", actor->clientnum, pl->clientnum, damage, gun, gib ? 1 : 0);

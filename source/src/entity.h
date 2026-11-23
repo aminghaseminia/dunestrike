@@ -112,6 +112,12 @@ static inline float hitzonescale(int zone)
 #define LIMPMILLIS 2500
 #define LIMPSPEED  0.6f
 
+// CS-style bullet tagging (slowdown on being shot)
+#define TAGMILLIS 450
+#define TAG_HEAVY 0.42f    // 58% slowdown: sniper, assault rifle, shotgun
+#define TAG_MEDIUM 0.48f   // 52% slowdown: subgun, carbine
+#define TAG_LIGHT 0.58f    // 42% slowdown: pistol, akimbo, etc.
+
 // shotgun hits pack the close range bonus, the zone and the three pellet bands into one int:
 // bonusdist (7 bits) | zone (3) | close (5) | middle (5) | outer (5)
 static inline int hitinfopack(int bonusdist, int zone, int close, int middle, int outer)
@@ -192,9 +198,12 @@ public:
     float eyeheightvel;
     int last_pos;
     int limpuntil;                      // a leg wound slows this ent down until then
+    int taguntil;                       // CS tagging: slowdown duration on bullet hit
+    float tagscale;                     // CS tagging: initial slowdown multiplier (e.g. 0.42f)
 
     physent() : o(0, 0, 0), deltapos(0, 0, 0), newpos(0, 0, 0), yaw(270), pitch(0), roll(0), pitchvel(0),
-            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0)
+            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0),
+            limpuntil(0), taguntil(0), tagscale(1.0f)
     {
         reset();
     }
@@ -215,6 +224,8 @@ public:
         onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = false;
         last_pos = 0;
         limpuntil = 0;
+        taguntil = 0;
+        tagscale = 1.0f;
     }
 
     virtual void oncollision() {}
