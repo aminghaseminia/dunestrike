@@ -24,6 +24,7 @@ clang++ -O2 -Wall `sdl2-config --cflags` "$DIR/test_all_keys_persian.cpp" `sdl2-
 clang++ -O2 -Wall "$DIR/test_bot_audio_removal.cpp" -o "$DIR/test_bot_audio_removal"
 clang++ -O2 -Wall "$DIR/test_designated_team_spawns.cpp" -o "$DIR/test_designated_team_spawns"
 clang++ -O2 -Wall "$DIR/test_buyzone_restrictions.cpp" -o "$DIR/test_buyzone_restrictions"
+clang++ -O2 -Wall "$DIR/test_weapons_overhaul.cpp" -o "$DIR/test_weapons_overhaul"
 
 # 2. Run unit tests
 echo "[RUN] Running test_bombsite..."
@@ -67,6 +68,9 @@ echo "[RUN] Running test_designated_team_spawns..."
 
 echo "[RUN] Running test_buyzone_restrictions..."
 "$DIR/test_buyzone_restrictions"
+
+echo "[RUN] Running test_weapons_overhaul..."
+"$DIR/test_weapons_overhaul"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

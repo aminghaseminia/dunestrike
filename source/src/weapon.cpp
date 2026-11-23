@@ -1573,7 +1573,8 @@ subgun::subgun(playerent *owner) : gun(owner, GUN_SUBGUN) {}
 bool subgun::selectable() { return weapon::selectable() && !m_noprimary && this == owner->primweap; }
 int subgun::dynspread()
 {
-    int base = shots > 2 ? 70 : ( info.spread + ( shots > 0 ? ( shots == 1 ? 5 : 10 ) : 0 ) );
+    int base = info.spread;
+    if(shots > 0) base += min(16, shots * 2);
     return apply_movement_spread(base);
 }
 
@@ -1657,7 +1658,8 @@ carbine::carbine(playerent *owner) : gun(owner, GUN_CARBINE) {}
 
 int carbine::dynspread()
 {
-    int base = info.spread + (shots > 0 ? 10 : 0);
+    int base = info.spread;
+    if(shots > 0) base += min(15, shots * 3);
     return apply_movement_spread(base);
 }
 
@@ -1670,7 +1672,13 @@ assaultrifle::assaultrifle(playerent *owner) : gun(owner, GUN_ASSAULT) {}
 
 int assaultrifle::dynspread()
 {
-    int base = shots > 2 ? 55 : ( info.spread + ( shots > 0 ? ( shots == 1 ? 5 : 15 ) : 0 ) );
+    int base = info.spread;
+    if(shots > 0)
+    {
+        if(shots <= 2) base += shots * 4;
+        else if(shots <= 6) base += 8 + (shots - 2) * 3;
+        else base = min(36, base + 20);
+    }
     return apply_movement_spread(base);
 }
 float assaultrifle::dynrecoil() { return info.recoil + (rnd(8)*-0.01f); }
@@ -1681,7 +1689,8 @@ bool assaultrifle::selectable() { return weapon::selectable() && !m_noprimary &&
 pistol::pistol(playerent *owner) : gun(owner, GUN_PISTOL) {}
 int pistol::dynspread()
 {
-    int base = info.spread + (shots > 1 ? min(shots * 8, 32) : 0);
+    int base = info.spread;
+    if(shots > 1) base += min(18, (shots - 1) * 4);
     return apply_movement_spread(base);
 }
 bool pistol::selectable() { return weapon::selectable() && !m_nopistol; }
@@ -1761,7 +1770,7 @@ bool knife::attack(vec &targ)
     vec unitv;
     float dist = to.dist(from, unitv);
     unitv.div(dist);
-    unitv.mul(3); // punch range
+    unitv.mul(4.2f); // CS knife slash range
     to = from;
     to.add(unitv);
     intersectgeometry(from,to);
