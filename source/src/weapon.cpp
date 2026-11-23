@@ -1124,7 +1124,52 @@ void weapon::renderaimhelp(bool teamwarning)
     if(!editmode) drawcrosshair(owner, teamwarning ? CROSSHAIR_TEAMMATE : owner->weaponsel->type);
     else drawcrosshair(owner, CROSSHAIR_EDIT);
 }
-int weapon::dynspread() { return info.spread; }
+int weapon::apply_movement_spread(int base)
+{
+    if(!owner) return base;
+
+    float sp = (float)base;
+
+    // 1. Jumping / In Air penalty (highest penalty)
+    if(!owner->onfloor && owner->timeinair > 50)
+    {
+        sp = sp * 2.2f + 35.0f;
+    }
+    else
+    {
+        float speed = owner->vel.magnitudexy();
+        bool is_moving = (speed > 0.08f || owner->move != 0 || owner->strafe != 0);
+
+        if(is_moving)
+        {
+            // 2. Moving on ground
+            if(owner->crouching)
+            {
+                // Crouch-walking
+                sp = sp * 1.15f + speed * 12.0f;
+            }
+            else
+            {
+                // Full running
+                sp = sp * 1.65f + speed * 25.0f;
+            }
+        }
+        else
+        {
+            // 3. Standing or Crouching completely still
+            if(owner->crouching)
+            {
+                // Crouch accuracy bonus (25% tighter spread)
+                sp = sp * 0.75f;
+            }
+            // Standing still retains baseline accuracy
+        }
+    }
+
+    return max(1, (int)sp);
+}
+
+int weapon::dynspread() { return apply_movement_spread(info.spread); }
 float weapon::dynrecoil() { return info.recoil; }
 bool weapon::selectable() { return this != owner->weaponsel && owner->state == CS_ALIVE && !owner->weaponchanging; }
 bool weapon::deselectable() { return !reloading; }
@@ -1526,7 +1571,12 @@ bool shotgun::selectable() { return weapon::selectable() && !m_noprimary && this
 
 subgun::subgun(playerent *owner) : gun(owner, GUN_SUBGUN) {}
 bool subgun::selectable() { return weapon::selectable() && !m_noprimary && this == owner->primweap; }
-int subgun::dynspread() { return shots > 2 ? 70 : ( info.spread + ( shots > 0 ? ( shots == 1 ? 5 : 10 ) : 0 ) ); } // CHANGED: 2010nov19 was: min(info.spread + 10 * shots, 80)
+int subgun::dynspread()
+{
+    int base = info.spread;
+    if(shots > 0) base += min(16, shots * 2);
+    return apply_movement_spread(base);
+}
 
 
 // sniperrifle
@@ -1559,12 +1609,21 @@ int sniperrifle::dynspread()
     if(scoped)
     {
         int scopetime = lastmillis - scoped_since;
-        if(scopetime > SCOPESETTLETIME)
-            return 1;
-        else
-            return max((info.spread * (SCOPESETTLETIME - scopetime)) / SCOPESETTLETIME, 1);
+        if(scopetime <= SCOPESETTLETIME)
+        {
+            int settle = max((info.spread * (SCOPESETTLETIME - scopetime)) / SCOPESETTLETIME, 1);
+            return apply_movement_spread(settle);
+        }
+        if(!owner) return 1;
+        if(!owner->onfloor && owner->timeinair > 50) return 60; // jumping sniper penalty
+        float speed = owner->vel.magnitudexy();
+        if(speed > 0.08f || owner->move != 0 || owner->strafe != 0)
+        {
+            return max(1, (int)(speed * 40.0f)); // moving sniper penalty
+        }
+        return 1; // perfectly still
     }
-    return info.spread;
+    return apply_movement_spread(info.spread * 2); // no-scope penalty
 }
 float sniperrifle::dynrecoil() { return scoped && lastmillis - scoped_since > SCOPESETTLETIME ? info.recoil / 3 : info.recoil; }
 bool sniperrifle::selectable() { return weapon::selectable() && !m_noprimary && this == owner->primweap; }
@@ -1597,6 +1656,13 @@ void sniperrifle::setscope(bool enable)
 
 carbine::carbine(playerent *owner) : gun(owner, GUN_CARBINE) {}
 
+int carbine::dynspread()
+{
+    int base = info.spread;
+    if(shots > 0) base += min(15, shots * 3);
+    return apply_movement_spread(base);
+}
+
 bool carbine::selectable() { return weapon::selectable() && !m_noprimary && this == owner->primweap; }
 
 
@@ -1604,13 +1670,29 @@ bool carbine::selectable() { return weapon::selectable() && !m_noprimary && this
 
 assaultrifle::assaultrifle(playerent *owner) : gun(owner, GUN_ASSAULT) {}
 
-int assaultrifle::dynspread() { return shots > 2 ? 55 : ( info.spread + ( shots > 0 ? ( shots == 1 ? 5 : 15 ) : 0 ) ); }
+int assaultrifle::dynspread()
+{
+    int base = info.spread;
+    if(shots > 0)
+    {
+        if(shots <= 2) base += shots * 4;
+        else if(shots <= 6) base += 8 + (shots - 2) * 3;
+        else base = min(36, base + 20);
+    }
+    return apply_movement_spread(base);
+}
 float assaultrifle::dynrecoil() { return info.recoil + (rnd(8)*-0.01f); }
 bool assaultrifle::selectable() { return weapon::selectable() && !m_noprimary && this == owner->primweap; }
 
 // pistol
 
 pistol::pistol(playerent *owner) : gun(owner, GUN_PISTOL) {}
+int pistol::dynspread()
+{
+    int base = info.spread;
+    if(shots > 1) base += min(18, (shots - 1) * 4);
+    return apply_movement_spread(base);
+}
 bool pistol::selectable() { return weapon::selectable() && !m_nopistol; }
 
 
@@ -1688,7 +1770,7 @@ bool knife::attack(vec &targ)
     vec unitv;
     float dist = to.dist(from, unitv);
     unitv.div(dist);
-    unitv.mul(3); // punch range
+    unitv.mul(4.2f); // CS knife slash range
     to = from;
     to.add(unitv);
     intersectgeometry(from,to);

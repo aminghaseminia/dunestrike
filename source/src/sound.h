@@ -72,6 +72,13 @@ enum
     S_HEARTBEAT,
     S_KTFSCORE,
     S_CAMERA,
+    S_FA_SPOTTED,
+    S_FA_BOMBPLANTED,
+    S_FA_DEFUSING,
+    S_FA_DEFUSED,
+    S_C4_BEEP,
+    S_C4_PLANT,
+    S_C4_DISARM,
     S_NULL
 };
 

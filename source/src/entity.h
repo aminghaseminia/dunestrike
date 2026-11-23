@@ -95,14 +95,15 @@ enum
 };
 
 // damage multiplier per hit zone, shared by client prediction and the server
+// Calibrated to CS hitzone multipliers: Head (4.0x), Stomach (1.25x), Torso/Chest (1.0x), Arms/Legs (0.75x)
 static inline float hitzonescale(int zone)
 {
     switch(zone)
     {
-        case HITZONE_HEAD:    return 3.0f;
-        case HITZONE_STOMACH: return 0.9f;
+        case HITZONE_HEAD:    return 4.0f;
+        case HITZONE_STOMACH: return 1.25f;
         case HITZONE_LEGS:    return 0.75f;
-        case HITZONE_ARMS:    return 0.7f;
+        case HITZONE_ARMS:    return 0.75f;
         case HITZONE_TORSO:
         default:              return 1.0f;
     }
@@ -111,6 +112,12 @@ static inline float hitzonescale(int zone)
 // a leg hit slows the target down for a while
 #define LIMPMILLIS 2500
 #define LIMPSPEED  0.6f
+
+// CS-style bullet tagging (slowdown on being shot)
+#define TAGMILLIS 450
+#define TAG_HEAVY 0.42f    // 58% slowdown: sniper, assault rifle, shotgun
+#define TAG_MEDIUM 0.48f   // 52% slowdown: subgun, carbine
+#define TAG_LIGHT 0.58f    // 42% slowdown: pistol, akimbo, etc.
 
 // shotgun hits pack the close range bonus, the zone and the three pellet bands into one int:
 // bonusdist (7 bits) | zone (3) | close (5) | middle (5) | outer (5)
@@ -192,9 +199,12 @@ public:
     float eyeheightvel;
     int last_pos;
     int limpuntil;                      // a leg wound slows this ent down until then
+    int taguntil;                       // CS tagging: slowdown duration on bullet hit
+    float tagscale;                     // CS tagging: initial slowdown multiplier (e.g. 0.42f)
 
     physent() : o(0, 0, 0), deltapos(0, 0, 0), newpos(0, 0, 0), yaw(270), pitch(0), roll(0), pitchvel(0),
-            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0)
+            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0),
+            limpuntil(0), taguntil(0), tagscale(1.0f)
     {
         reset();
     }
@@ -215,6 +225,8 @@ public:
         onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = false;
         last_pos = 0;
         limpuntil = 0;
+        taguntil = 0;
+        tagscale = 1.0f;
     }
 
     virtual void oncollision() {}
@@ -418,10 +430,9 @@ public:
         }
     }
 
-    // just subtract damage here, can set death, etc. later in code calling this
+    // CS-style damage calculation with armor penetration & helmet protection
     int dodamage(int damage, int gun, int zone = HITZONE_TORSO)
     {
-        guninfo gi = guns[gun];
         if(damage == INT_MAX)
         {
             damage = health;
@@ -429,36 +440,38 @@ public:
             return damage;
         }
 
-        // armour is a vest: it does not protect the head
-        if(zone == HITZONE_HEAD)
+        guninfo gi = valid_weapon(gun) ? guns[gun] : guns[GUN_PISTOL];
+
+        // Headshots without armor/helmet take unmitigated head damage
+        if(zone == HITZONE_HEAD && armour <= 0)
         {
             health -= damage;
             return damage;
         }
 
-        // 4-level armour - tiered approach: 16%, 33%, 37%, 41%
-        // Please update ./ac_website/htdocs/docs/introduction.html if this changes.
-        int armoursection = 0;
-        int ad = damage;
-        if(armour > 25) armoursection = 1;
-        if(armour > 50) armoursection = 2;
-        if(armour > 75) armoursection = 3;
-        switch(armoursection)
+        // Armor mitigation:
+        // In CS, armor penetration (gi.piercing) represents % of damage penetrating armor to health.
+        // e.g., 77.5% piercing means 77.5% damage goes to health, 22.5% absorbed by armor.
+        // Armor durability depleted = (damage absorbed) / 2.
+        if(armour > 0)
         {
-            case 0: ad = (int) (16.0f/25.0f * armour); break;             // 16
-            case 1: ad = (int) (17.0f/25.0f * armour) - 1; break;         // 33
-            case 2: ad = (int) (4.0f/25.0f * armour) + 25; break;         // 37
-            case 3: ad = (int) (4.0f/25.0f * armour) + 25; break;         // 41
-            default: break;
+            float pen = clamp(float(gi.piercing) / 100.0f, 0.0f, 1.0f);
+            int health_dmg = (int)ceil(damage * pen);
+            int armor_absorb = damage - health_dmg;
+            int armor_dmg = max(1, (int)ceil(armor_absorb * 0.5f));
+
+            if(armour >= armor_dmg)
+            {
+                armour -= armor_dmg;
+                damage = health_dmg;
+            }
+            else
+            {
+                // Armor exhausted during this hit
+                damage = health_dmg + (armor_dmg - armour) * 2;
+                armour = 0;
+            }
         }
-
-        //ra - reduced armor
-        //rd - reduced damage
-        int ra = (int) (ad * damage/100.0f);
-        int rd = ra-(ra*(gi.piercing/100.0f)); //Who cares about rounding errors anyways?
-
-        armour -= ra;
-        damage -= rd;
 
         health -= damage;
         return damage;
@@ -483,6 +496,8 @@ public:
     int lifesequence;                   // sequence id for each respawn, used in damage test
     int frags, flagscore, deaths, tks;
     int lastaction, lastmove, lastpain, lastvoicecom, lastdeath;
+    int lastspawn;
+    vec spawnpos;
     int clientrole;
     bool attacking;
     string name;
@@ -510,7 +525,7 @@ public:
     bool ignored, muted;
     bool nocorpse;
 
-    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), clientrole(CR_DEFAULT),
+    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
                   team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
                   prevweaponsel(NULL), weaponsel(NULL), nextweaponsel(NULL), primweap(NULL), nextprimweap(NULL), lastattackweapon(NULL),
                   smoothmillis(-1),
@@ -575,6 +590,7 @@ public:
         lastattackweapon = NULL;
         attacking = false;
         extern int lastmillis;
+        lastspawn = lastmillis;
         weaponchanging = lastmillis - weapons[gunselect]->weaponchangetime/2; // 2011jan16:ft: for a little no-shoot after spawn
         resetspec();
         eardamagemillis = 0;
@@ -622,7 +638,7 @@ public:
     int skin(int t = -1) { return nextskin[team_base(t < 0 ? team : t)]; }
     void setskin(int t, int s)
     {
-        const int maxskin[2] = { 10, 10 };
+        const int maxskin[2] = { 4, 4 }; // CS 1.6 Factions (0..3) for CT and T
         t = team_base(t < 0 ? team : t);
         nextskin[t] = (s & 63) % maxskin[t];
     }

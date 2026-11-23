@@ -75,7 +75,7 @@ extern float waterlevel;
 	#define DS_MASTER_PORT 28758
 #endif
 
-#define MAXCLIENTSONMASTER 16           // FIXME
+#define MAXCLIENTSONMASTER 32           // LAN servers above this are hidden from the browser
 #define CONFIGROTATEMAX 5               // keep 5 old versions of saved.cfg and init.cfg around
 
 #define DEFAULT_FOG 180

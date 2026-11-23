@@ -148,34 +148,27 @@ void CBotManager::LoadBotNamesFile()
 
 const char *CBotManager::GetBotName()
 {
-    const char *szOutput = NULL;
-    TMultiChoice<const char *> BotNameChoices;
-    short ChoiceVal;
-
-    for(int j=0;j<m_sBotNameCount;j++)
+    for(int j=0; j<m_sBotNameCount; j++)
     {
-        ChoiceVal = 50;
-
+        bool in_use = false;
         loopv(bots)
         {
             if (bots[i] && (!strcasecmp(bots[i]->name, m_szBotNames[j])))
             {
-                ChoiceVal = 0;
+                in_use = true;
                 break;
             }
         }
 
         if (!strcasecmp(player1->name, m_szBotNames[j]))
-            ChoiceVal = 0;
+            in_use = true;
 
-        if(ChoiceVal) BotNameChoices.Insert(m_szBotNames[j], ChoiceVal);
+        if(!in_use) return m_szBotNames[j];
     }
 
-    // Couldn't find a selection?
-    if (!BotNameChoices.GetSelection(szOutput))
-        szOutput = "Bot";
-
-    return szOutput;
+    static char fallback[32];
+    snprintf(fallback, sizeof(fallback), "bot_%d", bots.length() + 1);
+    return fallback;
 }
 
 void CBotManager::LoadBotTeamsFile()
@@ -894,7 +887,7 @@ botent *CBotManager::CreateBot(const char *team, const char *skill, const char *
 
     const char *tempteam = team && *team && strcmp(team, "random") ? team : BotManager.GetBotTeam();
     m->team = team_base(teamatoi(tempteam));
-    setskin(m, m->team  == TEAM_CLA ? rnd(4) : rnd(6), m->team);
+    setskin(m, rnd(4), m->team);
 
     if (skill && *skill && strcmp(skill, "random"))
     {

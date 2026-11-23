@@ -162,6 +162,8 @@ extern bool bindkey(keym *km, const char *action, int state = keym::ACTION_DEFAU
 extern keym **findbinda(const char *action, int type = keym::ACTION_DEFAULT);
 extern bool bindc(int code, const char *action, int type = keym::ACTION_DEFAULT);
 extern keym *findbindc(int code);
+extern keym *findbind(const char *key);
+extern int scancodetoasciikey(int scancode);
 
 // menus
 extern void rendermenu();
@@ -625,6 +627,10 @@ extern void flagmsg(int flag, int message, int actor, int flagtime);
 extern bool tryrespawn();
 extern void gotoplayerstart(playerent *d, entity *e);
 extern void findplayerstart(playerent *d, bool mapcenter = false, int arenaspawn = -1);
+extern vec team_spawn_base[2];
+extern void init_team_spawns();
+extern bool in_buy_zone(playerent *d);
+extern bool can_buy(playerent *d);
 extern void refreshsopmenu(void *menu, bool init);
 extern char *colorname(playerent *d, char *name = NULL, const char *prefix = "");
 extern char *colorping(int ping);
@@ -837,6 +843,7 @@ extern void hudeditf(int type, const char *s, ...) PRINTFARGS(2, 3);
 extern void show_out_of_renderloop_progress(float bar1, const char *text1, float bar2 = 0, const char *text2 = NULL);
 extern void updatedmgindicator(playerent *p, vec &attack);
 extern vec getradarpos();
+extern int radarposition;
 
 // renderparticles
 enum

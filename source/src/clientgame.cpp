@@ -466,7 +466,7 @@ playerent *newplayerent()                 // create a new blank player
 {
     playerent *d = new playerent;
     d->lastupdate = totalmillis;
-    setskin(d, rnd(6));
+    setskin(d, rnd(4));
     weapon::equipplayer(d); // flowtron : avoid overwriting d->spawnstate(gamemode) stuff from the following line (this used to be called afterwards)
     spawnstate(d);
     return d;
@@ -476,7 +476,7 @@ botent *newbotent()                 // create a new blank player
 {
     botent *d = new botent;
     d->lastupdate = totalmillis;
-    setskin(d, rnd(6));
+    setskin(d, rnd(4));
     weapon::equipplayer(d);
     spawnstate(d); // move like above
     int nextcn = 0;
@@ -662,24 +662,68 @@ void resetsleep(bool force)
 
 COMMANDF(resetsleeps, "", (void) { resetsleep(true); });
 
-// let the bomb carrier know when they are standing on the active site
+// let the bomb carrier know when they are standing on an active site, and drive C4 dynamic beeping
 static void bombcheck()
 {
-    static bool lastatsite = false;
-    if(!m_bomb || bombinfo.state != BOMB_LIVE || bombinfo.carrier != player1->clientnum)
+    static int lastatsite = -1;
+    static int lastbeepmillis = 0;
+
+    if(!m_bomb)
     {
-        lastatsite = false;
+        lastatsite = -1;
+        lastbeepmillis = 0;
         return;
     }
-    int site = 1 - bombinfo.attackerteam;
-    bool atsite = false;
-    if(site >= 0 && site < 2 && bombinfo.sites[site].x >= 0)
+
+    if(bombinfo.state == BOMB_LIVE && bombinfo.carrier == player1->clientnum)
     {
-        float dx = player1->o.x - bombinfo.sites[site].x, dy = player1->o.y - bombinfo.sites[site].y;
-        atsite = dx*dx + dy*dy <= 9.0f; // matches the server's default bomb_siteradius
+        int atsite = -1;
+        loopi(2)
+        {
+            if(bombinfo.sites[i].x >= 0)
+            {
+                float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
+                if(dx*dx + dy*dy <= 9.0f) // matches the server's default bomb_siteradius
+                {
+                    atsite = i;
+                    break;
+                }
+            }
+        }
+        if(atsite >= 0 && lastatsite != atsite) hudoutf("\f1You are at Site %c - press F or right-click to plant", atsite == 0 ? 'A' : 'B');
+        lastatsite = atsite;
     }
-    if(atsite && !lastatsite) hudoutf("\f1You are at the bomb site - press F or right-click to plant");
-    lastatsite = atsite;
+    else
+    {
+        lastatsite = -1;
+    }
+
+    // Dynamic CS C4 audio: progressive beep tempo as detonation approaches
+    if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
+    {
+        int elapsed = lastmillis - bombinfo.updatetime;
+        int remaining = max(0, bombinfo.timeremaining - elapsed);
+
+        if(remaining > 0)
+        {
+            int beep_interval = 1000; // default 1.0s (30-40s left)
+            if(remaining <= 2000) beep_interval = 125;        // Final 2s: urgent panic beeping (8 beeps/sec)
+            else if(remaining <= 5000) beep_interval = 250;   // 2-5s left: very fast (4 beeps/sec)
+            else if(remaining <= 10000) beep_interval = 350;  // 5-10s left: fast (under defuse wire)
+            else if(remaining <= 20000) beep_interval = 500;  // 10-20s left: moderate (2 beeps/sec)
+            else if(remaining <= 30000) beep_interval = 750;  // 20-30s left: quickening
+
+            if(lastmillis - lastbeepmillis >= beep_interval)
+            {
+                audiomgr.playsound(S_C4_BEEP, &bombinfo.pos, SP_HIGH);
+                lastbeepmillis = lastmillis;
+            }
+        }
+    }
+    else
+    {
+        lastbeepmillis = 0;
+    }
 }
 
 void updateworld(int curtime, int lastmillis)        // main game update loop
@@ -747,9 +791,111 @@ void gotoplayerstart(playerent *d, entity *e)
     d->roll = d->movroll = d->effroll = 0;
 }
 
+vec team_spawn_base[2] = { vec(0, 0, 0), vec(0, 0, 0) };
+bool team_spawn_base_init[2] = { false, false };
+
+void init_team_spawns()
+{
+    loopi(2)
+    {
+        team_spawn_base[i] = vec(0, 0, 0);
+        team_spawn_base_init[i] = false;
+    }
+    vector<int> team_spawns[2];
+    loopv(ents)
+    {
+        entity &e = ents[i];
+        if(e.type == PLAYERSTART)
+        {
+            if(e.attr2 == 0) team_spawns[0].add(i);
+            else if(e.attr2 == 1) team_spawns[1].add(i);
+        }
+    }
+    loopi(2)
+    {
+        if(team_spawns[i].length() > 0)
+        {
+            vec sum(0, 0, 0);
+            loopvj(team_spawns[i]) sum.add(vec(ents[team_spawns[i][j]].x, ents[team_spawns[i][j]].y, ents[team_spawns[i][j]].z));
+            sum.div((float)team_spawns[i].length());
+            team_spawn_base[i] = sum;
+            team_spawn_base_init[i] = true;
+        }
+    }
+    if(!team_spawn_base_init[0] || !team_spawn_base_init[1])
+    {
+        vector<int> all_spawns;
+        loopv(ents) if(ents[i].type == PLAYERSTART) all_spawns.add(i);
+        if(all_spawns.length() >= 2)
+        {
+            float maxdist = -1.0f;
+            int best_a = all_spawns[0], best_b = all_spawns[1];
+            loopv(all_spawns)
+            {
+                for(int j = i + 1; j < all_spawns.length(); j++)
+                {
+                    vec p1(ents[all_spawns[i]].x, ents[all_spawns[i]].y, ents[all_spawns[i]].z);
+                    vec p2(ents[all_spawns[j]].x, ents[all_spawns[j]].y, ents[all_spawns[j]].z);
+                    float d = p1.dist(p2);
+                    if(d > maxdist)
+                    {
+                        maxdist = d;
+                        best_a = all_spawns[i];
+                        best_b = all_spawns[j];
+                    }
+                }
+            }
+            team_spawn_base[0] = vec(ents[best_a].x, ents[best_a].y, ents[best_a].z);
+            team_spawn_base[1] = vec(ents[best_b].x, ents[best_b].y, ents[best_b].z);
+            team_spawn_base_init[0] = team_spawn_base_init[1] = true;
+        }
+    }
+}
+
+bool in_buy_zone(playerent *d)
+{
+    if(!d || d->state != CS_ALIVE) return false;
+    if(editmode) return true;
+    if(!m_teammode)
+    {
+        // In non-team modes, buyzone is anywhere near respawn point
+        if(d->spawnpos.squaredlen() > 0 && d->o.dist(d->spawnpos) <= 60.0f) return true;
+        return false;
+    }
+    int type = team_base(d->team);
+    if(type != 0 && type != 1) return false;
+
+    // Check proximity to own spawn position
+    if(d->spawnpos.squaredlen() > 0 && d->o.dist(d->spawnpos) <= 80.0f) return true;
+
+    // Check proximity to team designated base centroid
+    if(!team_spawn_base_init[type]) init_team_spawns();
+    if(team_spawn_base_init[type] && d->o.dist(team_spawn_base[type]) <= 90.0f) return true;
+
+    // Check proximity to any playerstart entity of own team
+    loopv(ents)
+    {
+        if(ents[i].type == PLAYERSTART && ents[i].attr2 == type)
+        {
+            if(d->o.dist(vec(ents[i].x, ents[i].y, ents[i].z)) <= 60.0f) return true;
+        }
+    }
+    return false;
+}
+
+bool can_buy(playerent *d)
+{
+    if(!d || d->state != CS_ALIVE) return false;
+    if(editmode) return true;
+    // 10-second buy time limit after spawn / round start
+    if(lastmillis - d->lastspawn > 10000) return false;
+    // Must be in designated team buy zone
+    if(!in_buy_zone(d)) return false;
+    return true;
+}
+
 void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
 {
-    int r = fixspawn-->0 ? 4 : rnd(10)+1;
     entity *e = NULL;
     if(!mapcenter)
     {
@@ -760,13 +906,56 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
             loopi(arenaspawn + 1) x = findentity(PLAYERSTART, x+1, type);
             if(x >= 0) e = &ents[x];
         }
+        else if(m_teammode && (type == 0 || type == 1))
+        {
+            // Designated Team Spawns: All members of a team spawn strictly at their designated team base!
+            vector<int> team_spawns;
+            loopv(ents)
+            {
+                if(ents[i].type == PLAYERSTART && ents[i].attr2 == type)
+                    team_spawns.add(i);
+            }
+            if(team_spawns.length() > 0)
+            {
+                static int team_cycle[2] = { -1, -1 };
+                team_cycle[type] = (team_cycle[type] + 1) % team_spawns.length();
+                e = &ents[team_spawns[team_cycle[type]]];
+            }
+            else
+            {
+                // Fallback for maps without team tags: partition by designated team base
+                if(!team_spawn_base_init[0] || !team_spawn_base_init[1]) init_team_spawns();
+                float closest_dist = -1.0f;
+                int closest_spawn = -1;
+                loopv(ents)
+                {
+                    if(ents[i].type == PLAYERSTART)
+                    {
+                        vec spos(ents[i].x, ents[i].y, ents[i].z);
+                        float d_team = spos.dist(team_spawn_base[type]);
+                        float d_enemy = spos.dist(team_spawn_base[1 - type]);
+                        if(d_team <= d_enemy)
+                        {
+                            if(closest_spawn < 0 || d_team < closest_dist)
+                            {
+                                closest_dist = d_team;
+                                closest_spawn = i;
+                            }
+                        }
+                    }
+                }
+                if(closest_spawn >= 0) e = &ents[closest_spawn];
+            }
+        }
         else if((m_teammode || m_arena) && !m_ktf) // ktf uses ffa spawns
         {
+            int r = fixspawn-->0 ? 4 : rnd(10)+1;
             loopi(r) spawncycle = findentity(PLAYERSTART, spawncycle+1, type);
             if(spawncycle >= 0) e = &ents[spawncycle];
         }
         else
         {
+            int r = fixspawn-->0 ? 4 : rnd(10)+1;
             float bestdist = -1;
 
             loopi(r)
@@ -788,6 +977,8 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
         d->o.x = d->o.y = (float)ssize/2;
         d->o.z = 4;
     }
+    d->lastspawn = lastmillis;
+    d->spawnpos = d->o;
     entinmap(d);
     exechook(HOOK_SP, "onSpawn", "%d", d->clientnum);
 }
@@ -824,7 +1015,7 @@ void bombcarrierchanged(int oldcarrier)
     if(!m_bomb || bombinfo.state != BOMB_LIVE) return;
     bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
     if(bombinfo.carrier == player1->clientnum)
-        hudoutf("\f1You have the bomb - plant it at the marked site");
+        hudoutf("\f1You have the bomb - plant at Site A or Site B");
     else if(bombinfo.carrier >= 0 && attacker)
     {
         playerent *newcarrier = getclient(bombinfo.carrier);
@@ -844,20 +1035,31 @@ void bombinfochanged(int oldstate)
                 hudoutf("\f3Round %d - \f1%s attack, %s defend", bombinfo.round, team_basestring(bombinfo.attackerteam), team_basestring(team_opposite(bombinfo.attackerteam)));
             break;
         case BOMB_PLANTING:
-            if(bombinfo.actionactor == player1->clientnum) hudoutf("\f3Planting the bomb...");
+            if(bombinfo.actionactor == player1->clientnum)
+            {
+                if(bombinfo.site >= 0 && bombinfo.site < 2)
+                    hudoutf("\f3Planting the bomb at Site %c...", bombinfo.site == 0 ? 'A' : 'B');
+                else
+                    hudoutf("\f3Planting the bomb...");
+            }
             break;
         case BOMB_PLANTED:
             if(oldstate == BOMB_PLANTING || oldstate == BOMB_WAIT)
             {
-                hudoutf("\f1The bomb has been planted!");
-                audiomgr.playsound(S_FLAGSCORE, SP_HIGHEST);
+                if(bombinfo.site >= 0 && bombinfo.site < 2)
+                    hudoutf("\f1The bomb has been planted at Site %c!", bombinfo.site == 0 ? 'A' : 'B');
+                else
+                    hudoutf("\f1The bomb has been planted!");
+                audiomgr.playsound(S_FA_BOMBPLANTED, SP_HIGHEST);
+                audiomgr.playsound(S_C4_PLANT, &bombinfo.pos, SP_HIGH);
             }
             break;
         case BOMB_DEFUSING:
             if(oldstate != BOMB_DEFUSING)
             {
                 hudoutf(bombinfo.actionactor == player1->clientnum ? "\f3Defusing the bomb..." : "\f1The bomb is being defused!");
-                audiomgr.playsound(S_FLAGRETURN, SP_HIGHEST);
+                audiomgr.playsound(S_FA_DEFUSING, SP_HIGHEST);
+                audiomgr.playsound(S_C4_DISARM, &bombinfo.pos, SP_HIGH);
             }
             break;
         case BOMB_END:
@@ -872,7 +1074,7 @@ void bombinfochanged(int oldstate)
             }
             else if(bombinfo.reason == BOMB_REASON_DEFUSED)
             {
-                audiomgr.playsound(S_FLAGRETURN, SP_HIGHEST);
+                audiomgr.playsound(S_FA_DEFUSED, SP_HIGHEST);
                 hudoutf("\f3The bomb was defused - defenders win the round");
             }
             else if(bombinfo.reason == BOMB_REASON_TIME)
@@ -1005,6 +1207,44 @@ void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bo
     if(pl->state != CS_ALIVE || intermission || ispaused) return;
     pl->lastpain = lastmillis;
     if(zone == HITZONE_LEGS) pl->limpuntil = lastmillis + LIMPMILLIS;
+
+    // CS Tagging: bullet or knife impact applies immediate momentum reduction and recovery slow
+    if(gun != GUN_GRENADE)
+    {
+        float tagmult = TAG_MEDIUM;
+        switch(gun)
+        {
+            case GUN_SNIPER:
+            case GUN_ASSAULT:
+            case GUN_SHOTGUN:
+                tagmult = TAG_HEAVY;
+                break;
+            case GUN_PISTOL:
+            case GUN_AKIMBO:
+                tagmult = TAG_LIGHT;
+                break;
+            default:
+                tagmult = TAG_MEDIUM;
+                break;
+        }
+
+        // Apply instant velocity cut
+        pl->vel.x *= tagmult;
+        pl->vel.y *= tagmult;
+
+        // Airborne tagging: stop mid-air surfing/bunny-hopping and arrest upward vertical momentum
+        if(!pl->onfloor)
+        {
+            pl->vel.x *= 0.7f;
+            pl->vel.y *= 0.7f;
+            if(pl->vel.z > 0.0f) pl->vel.z = -0.1f;
+        }
+
+        // Set tagging recovery window
+        pl->taguntil = lastmillis + TAGMILLIS;
+        pl->tagscale = tagmult;
+    }
+
     playerent *h = player1->isspectating() && player1->followplayercn >= 0 && (player1->spectatemode == SM_FOLLOW1ST || player1->spectatemode == SM_FOLLOW3RD || player1->spectatemode == SM_FOLLOW3RD_TRANSPARENT) ? getclient(player1->followplayercn) : NULL;
     if(!h) h = player1;
     exechook(HOOK_SP, "onHit", "%d %d %d %d %d", actor->clientnum, pl->clientnum, damage, gun, gib ? 1 : 0);
@@ -1270,6 +1510,7 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     preparectf(!(m_flags_ || m_bomb));
     suicided = -1;
     spawncycle = -1;
+    init_team_spawns();
     lasthit = 0;
     if(m_valid(gamemode) && !m_mp(gamemode)) respawnself();
     else findplayerstart(player1);
@@ -2013,18 +2254,22 @@ static void hitzoneselftestfn()
 
     d->o = so; d->head = shead; d->yaw = syaw; d->pitch = spitch; d->eyeheight = seye; d->radius = srad;
 
-    // multipliers
-    if(hitzonescale(HITZONE_HEAD) != 3.0f || hitzonescale(HITZONE_STOMACH) != 0.9f || hitzonescale(HITZONE_LEGS) != 0.75f
-       || hitzonescale(HITZONE_ARMS) != 0.7f || hitzonescale(HITZONE_TORSO) != 1.0f) { failures++; conoutf("hitzone FAIL scale"); }
+    // multipliers: Head (4.0x), Stomach (1.25x), Torso (1.0x), Legs (0.75x), Arms (0.75x)
+    if(hitzonescale(HITZONE_HEAD) != 4.0f || hitzonescale(HITZONE_STOMACH) != 1.25f || hitzonescale(HITZONE_LEGS) != 0.75f
+       || hitzonescale(HITZONE_ARMS) != 0.75f || hitzonescale(HITZONE_TORSO) != 1.0f) { failures++; conoutf("hitzone FAIL scale"); }
 
-    // armour applies to the chest but not the head
+    // armour applies to head and body via piercing calculation:
+    // Carbine has 70% piercing. For damage = 60:
+    // health_dmg = ceil(60 * 0.70) = 42.
+    // armor_absorb = 60 - 42 = 18.
+    // armor_dmg = ceil(18 * 0.5) = 9.
     playerstate ps;
     ps.health = 100; ps.armour = 100;
     int dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
-    if(dmg != 60 || ps.health != 40 || ps.armour != 100) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
+    if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
     ps.health = 100; ps.armour = 100;
     dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_TORSO);
-    if(dmg != 46 || ps.health != 54 || ps.armour != 76) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
+    if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
     ps.health = 100; ps.armour = 100;
     dmg = ps.dodamage(INT_MAX, GUN_KNIFE, HITZONE_TORSO);
     if(dmg != 100 || ps.health != 0 || ps.armour != 0) { failures++; conoutf("hitzone FAIL suicide"); }

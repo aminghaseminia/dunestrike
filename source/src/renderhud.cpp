@@ -234,7 +234,17 @@ void drawcrosshair(playerent *p, int n, color *c, float size)
         }
     }
     float s = size>0 ? size : (float)crosshairsize;
-    float chsize = s * ((p == player1 && p->weaponsel->type==GUN_ASSAULT && p->weaponsel->shots > 3) && (crosshairfx==1 || crosshairfx==3) ? 1.4f : 1.0f) * (n==CROSSHAIR_TEAMMATE ? 2.0f : 1.0f);
+    float dynamicscale = 1.0f;
+    if((crosshairfx == 1 || crosshairfx == 3) && p && p->weaponsel)
+    {
+        int curspread = p->weaponsel->dynspread();
+        int defspread = max(1, (int)p->weaponsel->info.spread);
+        float ratio = float(curspread) / float(defspread);
+        if(ratio < 0.75f) ratio = 0.75f;
+        if(ratio > 2.2f) ratio = 2.2f;
+        dynamicscale = ratio;
+    }
+    float chsize = s * dynamicscale * (n == CROSSHAIR_TEAMMATE ? 2.0f : 1.0f);
     glBegin(GL_TRIANGLE_STRIP);
     glTexCoord2f(0, 0); glVertex2f(VIRTW/2 - chsize, VIRTH/2 - chsize);
     glTexCoord2f(1, 0); glVertex2f(VIRTW/2 + chsize, VIRTH/2 - chsize);
@@ -451,10 +461,17 @@ bool insideradar(const vec &centerpos, float radius, const vec &o)
 
 bool isattacking(playerent *p) { return lastmillis-p->lastaction < 500; }
 
+VARP(radarposition, 0, 0, 1);
+
 vec getradarpos()
 {
-    float radarviewsize = VIRTH/6;
-    float overlaysize = radarviewsize*4.0f/3.25f;
+    float radarviewsize = min(VIRTW, VIRTH)/5;
+    float halfviewsize = radarviewsize/2.0f;
+    if(radarposition == 0)
+    {
+        return vec(radarviewsize + 88, radarviewsize + 80, 0);
+    }
+    float overlaysize = (VIRTH/6)*4.0f/3.25f;
     return vec(VIRTW-10-VIRTH/28-overlaysize, 10+VIRTH/52, 0);
 }
 
@@ -567,13 +584,14 @@ void drawradar_showmap(playerent *p, int w, int h)
     {
         glColor4f(1.0f, 1.0f, 1.0f, (sinf(lastmillis / 100.0f) + 1.0f) / 2.0f);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        bool attacker = player1->team == TEAM_SPECT || (team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam);
-        int activesite = 1 - bombinfo.attackerteam;
-        if(attacker && activesite >= 0 && activesite < 2 && bombinfo.sites[activesite].x >= 0
-           && !OUTBORD(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y))
+        loopi(2)
         {
-            vec pos = vec(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y, 0).sub(mdd).mul(coordtrans);
-            drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+            if(bombinfo.sites[i].x >= 0 && !OUTBORD(bombinfo.sites[i].x, bombinfo.sites[i].y))
+            {
+                vec pos = vec(bombinfo.sites[i].x, bombinfo.sites[i].y, 0).sub(mdd).mul(coordtrans);
+                bool is_planted_here = (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING) && (bombinfo.site == i);
+                drawradarent(pos.x, pos.y, 0, is_planted_here ? 2 : 3, is_planted_here ? 3 : 2, iconsize, true, i == 0 ? "Site A" : "Site B"); // bomb site
+            }
         }
         if(bombinfo.pos.x >= 0 && !OUTBORD(bombinfo.pos.x, bombinfo.pos.y)
            && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
@@ -608,7 +626,7 @@ void drawradar_vicinity(playerent *p, int w, int h)
     float d2s = radarheight * radarheight / 4.0f;
     glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
-    vec centerpos(VIRTW-halfviewsize-72, halfviewsize+64, 0);
+    vec centerpos(radarposition == 0 ? (halfviewsize+72) : (VIRTW-halfviewsize-72), halfviewsize+64, 0);
     glTranslatef(centerpos.x, centerpos.y, 0);
     glRotatef(-camera1->yaw, 0, 0, 1);
     glTranslatef(-halfviewsize, -halfviewsize, 0);
@@ -634,6 +652,10 @@ void drawradar_vicinity(playerent *p, int w, int h)
         {
             rtmp.mul(scaled);
             drawradarent(rtmp.x, rtmp.y, pl->yaw, pl->state==CS_ALIVE ? (isattacking(pl) ? 2 : 0) : 1, spect3rd && d == pl ? 2 : pl_baseteam, iconsize, isattacking(pl), "%s", colorname(pl));
+            if(m_bomb && bombinfo.carrier == pl->clientnum)
+            {
+                drawradarent(rtmp.x + iconsize*0.4f, rtmp.y - iconsize*0.4f, 0, 2, 3, iconsize*0.75f, true);
+            }
         }
     }
     if(m_flags_)
@@ -695,26 +717,54 @@ void drawradar_vicinity(playerent *p, int w, int h)
     {
         glColor4f(1.0f, 1.0f, 1.0f, (sinf(lastmillis / 100.0f) + 1.0f) / 2.0f);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        bool attacker = player1->team == TEAM_SPECT || (team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam);
-        int activesite = 1 - bombinfo.attackerteam;
-        if(attacker && activesite >= 0 && activesite < 2 && bombinfo.sites[activesite].x >= 0)
+        loopi(2)
         {
-            vec pos = vec(bombinfo.sites[activesite].x, bombinfo.sites[activesite].y, 0).sub(d->o);
-            if(pos.sqrxy() < d2s)
+            if(bombinfo.sites[i].x >= 0)
             {
+                vec pos = vec(bombinfo.sites[i].x, bombinfo.sites[i].y, 0).sub(d->o);
+                pos.z = 0;
+                float dist = pos.magnitude();
+                float maxdist = radarheight / 2.0f;
+                if(dist > maxdist && maxdist > 0)
+                {
+                    pos.mul(maxdist * 0.90f / dist);
+                }
                 pos.mul(scaled);
-                drawradarent(pos.x, pos.y, 0, 3, 2, iconsize, true); // bomb site
+
+                bool is_planted_here = (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING) && (bombinfo.site == i);
+                drawradarent(pos.x, pos.y, 0, is_planted_here ? 2 : 3, is_planted_here ? 3 : 2, iconsize, true); // bomb site
+
+                glPushMatrix();
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glTranslatef(pos.x + iconsize * 0.4f, pos.y - iconsize * 0.5f, 0);
+                glScalef(0.6f, 0.6f, 1.0f);
+                if(is_planted_here)
+                {
+                    int flash = (lastmillis / 150) % 2;
+                    draw_text(i == 0 ? "A" : "B", 0, 0, 0xFF, flash ? 0x20 : 0xFF, flash ? 0x20 : 0x20);
+                }
+                else
+                {
+                    draw_text(i == 0 ? "A" : "B", 0, 0, 0x55, 0xFF, 0x55);
+                }
+                glDisable(GL_BLEND);
+                glPopMatrix();
             }
         }
         if(bombinfo.pos.x >= 0 && (bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING
             || (bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)))
         {
             vec pos = vec(bombinfo.pos).sub(d->o);
-            if(pos.sqrxy() < d2s)
+            pos.z = 0;
+            float dist = pos.magnitude();
+            float maxdist = radarheight / 2.0f;
+            if(dist > maxdist && maxdist > 0)
             {
-                pos.mul(scaled);
-                drawradarent(pos.x, pos.y, 0, 2, 3, iconsize, true); // bomb
+                pos.mul(maxdist * 0.90f / dist);
             }
+            pos.mul(scaled);
+            drawradarent(pos.x, pos.y, 0, 2, 3, iconsize, true); // bomb
         }
     }
     glEnable(GL_BLEND);
@@ -793,6 +843,102 @@ const char *ghoststrings[] =
 {
   "none", "deathcam", "chase 1st", "chase 3rd [O]", "chase 3rd [A]", "fly", "overview", ""
 };
+
+// ---------------------------------------------------------------------------
+// mode & objective HUD
+//
+// Small two-line panel at the top of the screen: the game mode in plain
+// English and what the local player is supposed to do right now. Labels are
+// kept to one or two words so they stay readable in the bitmap font.
+// ---------------------------------------------------------------------------
+
+VARP(hidemodeinfo, 0, 0, 1);
+VARP(hudmodetest, 0, 0, 1);
+
+static const char *hudmodename(int mode)
+{
+    switch(mode)
+    {
+        case GMODE_TEAMDEATHMATCH:
+        case GMODE_BOTTEAMDEATHMATCH:    return "TEAM DEATHMATCH";
+        case GMODE_DEATHMATCH:
+        case GMODE_BOTDEATHMATCH:        return "DEATHMATCH";
+        case GMODE_CTF:                  return "CAPTURE FLAG";
+        case GMODE_KEEPTHEFLAG:
+        case GMODE_TEAMKEEPTHEFLAG:      return "KEEP FLAG";
+        case GMODE_KEEPTHEFLAGCONTINUE:  return "KEEP FLAG+";
+        case GMODE_HUNTTHEFLAG:          return "HUNT FLAG";
+        case GMODE_LASTSWISSSTANDING:
+        case GMODE_TEAMLSS:
+        case GMODE_BOTLSS:               return "KNIFE ONLY";
+        case GMODE_ONESHOTONEKILL:
+        case GMODE_TEAMONESHOTONEKILL:
+        case GMODE_BOTONESHOTONEKILL:
+        case GMODE_BOTTEAMONESHOTONKILL: return "ONE SHOT";
+        case GMODE_PISTOLFRENZY:
+        case GMODE_TEAMPF:
+        case GMODE_BOTPISTOLFRENZY:      return "PISTOL ONLY";
+        case GMODE_SURVIVOR:
+        case GMODE_TEAMSURVIVOR:
+        case GMODE_BOTTEAMSURVIVOR:      return "SURVIVOR";
+        case GMODE_BOMB:                 return "BOMB DEFUSAL";
+        case GMODE_COOPEDIT:             return "COOP EDIT";
+        default:                         return acronymmodestr(mode);
+    }
+}
+
+static const char *hudmodeobjective()
+{
+    if(m_bomb)
+    {
+        bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
+        switch(bombinfo.state)
+        {
+            case BOMB_PLANTING: return attacker ? "PLANTING" : "STOP THE PLANT";
+            case BOMB_PLANTED:  return attacker ? "PROTECT BOMB" : "DEFUSE BOMB";
+            case BOMB_DEFUSING: return attacker ? "PROTECT BOMB" : "DEFUSING";
+            case BOMB_END:      return "ROUND OVER";
+            default:            return attacker ? "PLANT BOMB" : "DEFEND SITES";
+        }
+    }
+    if(m_ctf)    return "STEAL FLAG";
+    if(m_htf)    return "HUNT FLAG";
+    if(m_ktf)    return "HOLD FLAG";
+    if(m_lss)    return "LAST ALIVE";
+    if(m_osok)   return "ONE SHOT";
+    if(m_pistol) return "PISTOL ONLY";
+    if(m_lms)    return "LAST ALIVE";
+    if(m_coop)   return "BUILD MAP";
+    return "MOST KILLS";
+}
+
+void drawmodeinfo()
+{
+    if(hidemodeinfo || (!hudmodetest && !multiplayer(NULL) && !m_botmode)) return;
+
+    const char *name = hudmodename(gamemode);
+    const char *obj = hudmodeobjective();
+    int namew = text_width(name), objw = text_width(obj);
+    int x1 = (VIRTW * 2 - namew) / 2, x2 = (VIRTW * 2 - objw) / 2;
+    int y1 = FONTH * 3 / 2, y2 = y1 + FONTH + 2;
+
+    // darken the strip behind the labels so they stay readable on bright maps
+    int bx1 = min(x1, x2) - FONTH, bx2 = max(x1 + namew, x2 + objw) + FONTH;
+    int by1 = y1 - FONTH / 2, by2 = y2 + FONTH + FONTH / 4;
+    glDisable(GL_TEXTURE_2D);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0, 0, 0, 0.45f);
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(bx1, by1); glVertex2f(bx2, by1); glVertex2f(bx1, by2); glVertex2f(bx2, by2);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
+
+    // drop shadow first, then the text itself
+    draw_text(name, x1 + 2, y1 + 2, 0, 0, 0, 190);
+    draw_text(obj,  x2 + 2, y2 + 2, 0, 0, 0, 190);
+    draw_text(name, x1, y1, 255, 255, 255, 235);
+    draw_text(obj,  x2, y2, 210, 230, 180, 235);
+}
 
 void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwater, int elapsed)
 {
@@ -908,6 +1054,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     }
     glLoadIdentity();
     glOrtho(0, VIRTW*2, VIRTH*2, 0, -1, 1);
+    drawmodeinfo();
     extern void r_accuracy(int h);
     extern void *scoremenu;
     extern gmenu *curmenu;
@@ -1006,7 +1153,13 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     if(m_bomb && !intermission)
     {
         int y = 20 + 2*FONTH;
-        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d", bombinfo.wins[0], bombinfo.wins[1], bombinfo.round);
+        extern int bomb_roundlimit, bomb_halftime;
+        int blimit = bomb_roundlimit > 0 ? bomb_roundlimit : 8;
+        int htr = bomb_halftime > 0 ? bomb_halftime : (blimit > 1 ? blimit - 1 : 1);
+        const char *halfinfo = bombinfo.round <= htr ? "1st Half" : "2nd Half";
+        bool matchpoint = (bombinfo.wins[0] == blimit - 1 || bombinfo.wins[1] == blimit - 1);
+        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d (%s)%s",
+            bombinfo.wins[0], bombinfo.wins[1], bombinfo.round, halfinfo, matchpoint ? " \f2[MATCH POINT]" : "");
         draw_text(scoreline, (VIRTW*2 - text_width(scoreline))/2, y, 255, 255, 255);
 
         const char *role = "spectating";
@@ -1027,7 +1180,8 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         else if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
         {
             int remaining = max(0, bombinfo.timeremaining - elapsed);
-            formatstring(timerline)("\f1BOMB %02d:%02d", remaining/60000, (remaining/1000)%60);
+            const char *sitename = (bombinfo.site == 0 ? "SITE A" : (bombinfo.site == 1 ? "SITE B" : "UNKNOWN"));
+            formatstring(timerline)("\f3C4 PLANTED [%s] - %02d:%02d", sitename, remaining/60000, (remaining/1000)%60);
             draw_text(timerline, (VIRTW*2 - text_width(timerline))/2, y + 2*FONTH, 255, 255, 255);
         }
         else if(bombinfo.state == BOMB_LIVE)
@@ -1043,22 +1197,37 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             int pct = bombinfo.actionduration > 0 ? 100 - (remaining * 100 / bombinfo.actionduration) : 0;
             if(pct < 0) pct = 0;
             else if(pct > 100) pct = 100;
-            defformatstring(actionline)("\f3%s %d%%", bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING", pct);
+            const char *sitename = (bombinfo.site == 0 ? "SITE A" : (bombinfo.site == 1 ? "SITE B" : "SITE ?"));
+            defformatstring(actionline)("\f3%s AT %s (%d%%)",
+                bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING",
+                sitename,
+                pct);
             draw_text(actionline, (VIRTW*2 - text_width(actionline))/2, y + 3*FONTH, 255, 255, 255);
         }
 
         const char *hint = NULL;
+        string hintbuf;
         bool attacker = team_isactive(player1->team) && team_base(player1->team) == bombinfo.attackerteam;
         if(bombinfo.state == BOMB_LIVE && bombinfo.carrier == player1->clientnum)
         {
-            bool atsite = false;
-            int activesite = 1 - bombinfo.attackerteam;
-            if(bombinfo.sites[activesite].x >= 0)
+            int atsite = -1;
+            loopi(2)
             {
-                float dx = player1->o.x - bombinfo.sites[activesite].x, dy = player1->o.y - bombinfo.sites[activesite].y;
-                if(dx*dx + dy*dy <= 9.0f) atsite = true;
+                if(bombinfo.sites[i].x >= 0)
+                {
+                    float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
+                    if(dx*dx + dy*dy <= 9.0f) { atsite = i; break; }
+                }
             }
-            hint = atsite ? "\f1press F or right-click to plant the bomb" : "\f1YOU HAVE THE BOMB - go to the marked site";
+            if(atsite >= 0)
+            {
+                formatstring(hintbuf)("\f1press F or right-click to plant at Site %c", atsite == 0 ? 'A' : 'B');
+                hint = hintbuf;
+            }
+            else
+            {
+                hint = "\f1YOU HAVE THE BOMB - plant at Site A or Site B";
+            }
         }
         else if(bombinfo.state == BOMB_PLANTED && team_isactive(player1->team) && team_base(player1->team) != bombinfo.attackerteam)
         {
@@ -1198,6 +1367,12 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
 
         if(p->state == CS_ALIVE && !hidehudequipment)
         {
+            if(p == player1 && !intermission && can_buy(p))
+            {
+                int secs_left = max(0, (10000 - (lastmillis - p->lastspawn) + 999) / 1000);
+                defformatstring(buyinfo)("\f0[BUY ZONE: Press B (%ds)]", secs_left);
+                draw_text(buyinfo, 48, 760);
+            }
             pushfont("huddigits");
             draw_textf("%d", HUDPOS_HEALTH + HUDPOS_NUMBERSPACING, 823, p->health);
             if(p->armour) draw_textf("%d", HUDPOS_ARMOUR + HUDPOS_NUMBERSPACING, 823, p->armour);
