@@ -16,6 +16,7 @@ struct weapon
     const struct guninfo &info;
     int &ammo, &mag, &gunwait, shots;
     virtual int dynspread();
+    int apply_movement_spread(int base);
     virtual float dynrecoil();
     int reloading, lastaction;
 
@@ -122,6 +123,7 @@ struct sniperrifle : gun
 struct carbine : gun
 {
     carbine(playerent *owner);
+    int dynspread();
     bool selectable();
 };
 
@@ -146,6 +148,7 @@ struct assaultrifle : gun
 struct pistol : gun
 {
     pistol(playerent *owner);
+    int dynspread();
     bool selectable();
 };
 
