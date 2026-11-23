@@ -611,6 +611,7 @@ void keypress(int keycode, int scancode, bool isdown, SDL_Keymod mod)
 {
     keym *haskey = keyms.access(keycode);
     if(!haskey && !(keycode & SDLK_SCANCODE_MASK) && scancode) haskey = keyms.access(scancode | SDLK_SCANCODE_MASK); // keycode not found: maybe we know the scancode
+    if(!haskey && scancode) haskey = findbind(SDL_GetScancodeName((SDL_Scancode)scancode)); // fallback to physical hardware key (supports non-Latin keyboard layouts like Persian)
     if(!haskey && isdown) haskey = autokeymap(keycode, scancode);
     if(haskey && haskey->pressed) execbind(*haskey, isdown); // allow pressed keys to release
     else if(saycommandon) consolekey(keycode, isdown, mod); // keystrokes go to commandline
