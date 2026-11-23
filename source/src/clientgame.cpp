@@ -466,7 +466,7 @@ playerent *newplayerent()                 // create a new blank player
 {
     playerent *d = new playerent;
     d->lastupdate = totalmillis;
-    setskin(d, rnd(6));
+    setskin(d, rnd(4));
     weapon::equipplayer(d); // flowtron : avoid overwriting d->spawnstate(gamemode) stuff from the following line (this used to be called afterwards)
     spawnstate(d);
     return d;
@@ -476,7 +476,7 @@ botent *newbotent()                 // create a new blank player
 {
     botent *d = new botent;
     d->lastupdate = totalmillis;
-    setskin(d, rnd(6));
+    setskin(d, rnd(4));
     weapon::equipplayer(d);
     spawnstate(d); // move like above
     int nextcn = 0;
