@@ -323,7 +323,7 @@ int get_floor_material(const vec &pos)
             Texture *t = lookupworldtexture(tex, false);
             if(t && t != noworldtexture && t->name)
             {
-                char buf[128];
+                string buf;
                 copystring(buf, t->name);
                 for(char *c = buf; *c; c++) *c = tolower(*c);
 
