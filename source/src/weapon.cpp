@@ -18,6 +18,7 @@ sgray sgr[SGRAYS*3];
 int burstshotssettings[NUMGUNS] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 bool quicknade = false;
+bool underhand_throw = false;
 
 void updatelastaction(playerent *d, int millis = lastmillis)
 {
@@ -738,6 +739,103 @@ void radialeffect(playerent *o, vec &v, int qdam, playerent *at, int gun)
 
 vector<bounceent *> bounceents;
 
+struct firezone
+{
+    vec pos;
+    playerent *owner;
+    int startmillis;
+    int endmillis;
+    int lastdamage;
+    float radius;
+};
+
+vector<firezone> firezones;
+
+void create_firezone(const vec &pos, playerent *owner)
+{
+    firezone &fz = firezones.add();
+    fz.pos = pos;
+    fz.owner = owner;
+    fz.startmillis = lastmillis;
+    fz.endmillis = lastmillis + 7500; // 7.5 seconds area denial
+    fz.lastdamage = lastmillis;
+    fz.radius = 10.0f;
+}
+
+void extinguish_firezones_near(const vec &pos, float maxdist)
+{
+    int extinguished = 0;
+    loopv(firezones)
+    {
+        firezone &fz = firezones[i];
+        if(fz.pos.dist(pos) <= maxdist)
+        {
+            fz.endmillis = lastmillis; // extinguish immediately
+            particle_splash(PART_SMOKE, 40, 600, fz.pos);
+            extinguished++;
+        }
+    }
+    if(extinguished > 0)
+    {
+        conoutf("\f0[TACTICAL] Smoke grenade extinguished %d fire zone(s)!", extinguished);
+    }
+}
+
+void update_firezones()
+{
+    if(firezones.empty()) return;
+    loopv(firezones)
+    {
+        firezone &fz = firezones[i];
+        if(lastmillis > fz.endmillis)
+        {
+            firezones.remove(i--);
+            continue;
+        }
+
+        // Render ambient fire & spark particles
+        if(rnd(3) == 0)
+        {
+            vec sparkpos = fz.pos;
+            float angle = (float)rnd(360) * RAD;
+            float dist = (float)rnd((int)(fz.radius * 10)) / 10.0f;
+            sparkpos.x += cosf(angle) * dist;
+            sparkpos.y += sinf(angle) * dist;
+            particle_splash(PART_SPARK, 3, 120, sparkpos);
+            if(rnd(4) == 0) particle_splash(PART_SMOKE, 2, 200, sparkpos);
+        }
+
+        // Damage tick every 250ms (~24 DPS: 6 damage per quarter-second)
+        if(lastmillis - fz.lastdamage >= 250)
+        {
+            fz.lastdamage = lastmillis;
+            if(player1 && player1->state == CS_ALIVE)
+            {
+                float d = player1->o.dist(fz.pos);
+                if(d <= fz.radius && fabs(player1->o.z - fz.pos.z) < 6.0f)
+                {
+                    vec dir = vec(player1->o).sub(fz.pos);
+                    if(dir.magnitude() > 0.001f) dir.normalize(); else dir = vec(0, 0, 1);
+                    hit(6, player1, fz.owner ? fz.owner : player1, dir, GUN_GRENADE, false, 0, HITZONE_TORSO);
+                }
+            }
+
+            loopvj(players)
+            {
+                playerent *p = players[j];
+                if(!p || p->state != CS_ALIVE) continue;
+                float d = p->o.dist(fz.pos);
+                if(d <= fz.radius && fabs(p->o.z - fz.pos.z) < 6.0f)
+                {
+                    vec dir = vec(p->o).sub(fz.pos);
+                    if(dir.magnitude() > 0.001f) dir.normalize(); else dir = vec(0, 0, 1);
+                    hit(6, p, fz.owner ? fz.owner : p, dir, GUN_GRENADE, false, 0, HITZONE_TORSO);
+                }
+            }
+        }
+    }
+}
+
 void removebounceents(playerent *owner)
 {
     loopv(bounceents) if(bounceents[i]->owner==owner) { delete bounceents[i]; bounceents.remove(i--); }
@@ -746,6 +844,7 @@ void removebounceents(playerent *owner)
 void movebounceents()
 {
     if(ispaused) return;
+    update_firezones();
     loopv(bounceents) if(bounceents[i])
     {
         bounceent *p = bounceents[i];
@@ -761,6 +860,7 @@ void movebounceents()
 
 void clearbounceents()
 {
+    firezones.setsize(0);
     if(gamespeed==100);
     else if(multiplayer(NULL)) bounceents.add((bounceent *)player1);
     loopv(bounceents) if(bounceents[i]) { delete bounceents[i]; bounceents.remove(i--); }
@@ -849,6 +949,45 @@ void shorten(const vec &from, vec &target, float distsquared)
     if(m < 0.07f) target.add(vec(0.1f, 0.1f, 0.1f));   // if "from == target" just fake a target to avoid zero-length fx vectors
     else target.mul(max(0.07f, sqrtf(distsquared / m)));
     target.add(from);
+}
+
+static inline bool ispointsolid(const vec &p)
+{
+    if(p.x < 0 || p.x >= ssize || p.y < 0 || p.y >= ssize) return true;
+    sqr *s = S((int)p.x, (int)p.y);
+    return SOLID(s)
+        || p.z < s->floor - (s->type==FHF ? s->vdelta/4 : 0)
+        || p.z > s->ceil  + (s->type==CHF ? s->vdelta/4 : 0);
+}
+
+static float getpenpower(int gun)
+{
+    switch(gun)
+    {
+        case GUN_SNIPER:  return 2.5f; // penetrates thick walls and crates (AWP)
+        case GUN_ASSAULT: return 1.8f; // penetrates medium walls and crates (AK-47)
+        case GUN_CARBINE: return 1.6f; // penetrates medium walls and crates (M4A1)
+        case GUN_SUBGUN:  return 1.0f; // penetrates thin doors and corners (MP5)
+        case GUN_PISTOL:  return 0.6f; // penetrates thin wooden crates/doors
+        case GUN_AKIMBO:  return 0.6f;
+        case GUN_SHOTGUN: return 0.4f;
+        default: return 0.0f;
+    }
+}
+
+static float getpenfactor(int gun)
+{
+    switch(gun)
+    {
+        case GUN_SNIPER:  return 0.70f; // 70% damage retention
+        case GUN_ASSAULT: return 0.50f; // 50% damage retention
+        case GUN_CARBINE: return 0.50f; // 50% damage retention
+        case GUN_SUBGUN:  return 0.35f; // 35% damage retention
+        case GUN_PISTOL:  return 0.25f; // 25% damage retention
+        case GUN_AKIMBO:  return 0.25f;
+        case GUN_SHOTGUN: return 0.20f;
+        default: return 0.0f;
+    }
 }
 
 void raydamage(vec &from, vec &to, playerent *d)
@@ -944,6 +1083,62 @@ void raydamage(vec &from, vec &to, playerent *d)
         if(d == player1) hit = true;
         shorten(from, to, distsquared);
         hitscount++;
+    }
+    else if(d && d->weaponsel)
+    {
+        // Wallbang penetration check when bullet hits wall/obstacle
+        int gun = d->weaponsel->type;
+        float max_pen = getpenpower(gun);
+        if(max_pen > 0.0f)
+        {
+            vec dir = vec(to).sub(from);
+            float dist = dir.magnitude();
+            if(dist > 0.001f)
+            {
+                dir.div(dist); // unit vector along bullet trajectory
+                float step = 0.15f;
+                float pen_dist = 0.0f;
+                vec exit_pos = to;
+                bool penetrated = false;
+                for(float cur = step; cur <= max_pen; cur += step)
+                {
+                    vec test_p = vec(to).add(vec(dir).mul(cur));
+                    if(!ispointsolid(test_p))
+                    {
+                        exit_pos = test_p;
+                        pen_dist = cur;
+                        penetrated = true;
+                        break;
+                    }
+                }
+                if(penetrated)
+                {
+                    vec far_to = vec(exit_pos).add(vec(dir).mul(256.0f));
+                    intersectgeometry(exit_pos, far_to);
+                    int wb_zone = HITZONE_NONE;
+                    float wb_distsq = 0.0f;
+                    playerent *wb_target = intersectclosest(exit_pos, far_to, d, wb_distsq, wb_zone);
+                    if(wb_target)
+                    {
+                        if(wb_zone < HITZONE_TORSO || wb_zone >= NUMHITZONES) wb_zone = HITZONE_TORSO;
+                        float pen_eff = getpenfactor(gun) * (1.0f - (pen_dist / max_pen) * 0.4f);
+                        int wb_dam = (int)(dam * pen_eff * hitzonescale(wb_zone) + 0.5f);
+                        if(wb_dam < 1) wb_dam = 1;
+                        bool gib = (gun == GUN_SNIPER && wb_zone == HITZONE_HEAD && wb_dam >= wb_target->health);
+                        hitpush(wb_dam, wb_target, d, exit_pos, far_to, gun, gib, wb_zone, wb_zone);
+                        if(d == player1)
+                        {
+                            hit = true;
+                            conoutf("\f0[WALLBANG] Penetrated wall (%.1f units) - hit %s for %d damage!", pen_dist, colorname(wb_target), wb_dam);
+                        }
+                        hitscount++;
+                        particle_splash(PART_SPARK, 12, 220, exit_pos);
+                        addbullethole(d, exit_pos, far_to);
+                        addshotline(d, exit_pos, far_to);
+                    }
+                }
+            }
+        }
     }
 
     if(d == player1 && multiplayer(NULL))
@@ -1235,16 +1430,17 @@ void weapon::equipplayer(playerent *pl)
 
 enum { NS_NONE, NS_ACTIVATED = 0, NS_THROWN, NS_EXPLODED };
 
-VARP(nadetype, 0, 0, 2); // 0: HE Grenade, 1: Tactical Smoke, 2: Flashbang
+VARP(nadetype, 0, 0, 3); // 0: HE Grenade, 1: Tactical Smoke, 2: Flashbang, 3: Molotov
 
 void setnadetype(int *t)
 {
     if(t)
     {
-        nadetype = clamp(*t, 0, 2);
+        nadetype = clamp(*t, 0, 3);
         if(nadetype == 0) conoutf("\f2Selected: Explosive HE Grenade");
         else if(nadetype == 1) conoutf("\f2Selected: Tactical Smoke Grenade");
         else if(nadetype == 2) conoutf("\f2Selected: Flashbang Grenade");
+        else if(nadetype == 3) conoutf("\f2Selected: Molotov / Incendiary Grenade");
     }
 }
 COMMAND(setnadetype, "i");
@@ -1289,6 +1485,7 @@ void grenadeent::splash()
         // Tactical Volumetric Smoke: dense cloud covering the area, lasting ~16 seconds
         particle_smokebomb(o, 220, 16000);
         adddynlight(NULL, o, 12, 1000, 500, 200, 200, 200);
+        extinguish_firezones_near(o, 14.0f);
         return;
     }
     else if(nadetype == NADE_FLASH)
@@ -1312,6 +1509,16 @@ void grenadeent::splash()
                 player1->eardamagemillis = lastmillis + (int)(flashduration * 0.8f);
             }
         }
+        return;
+    }
+    else if(nadetype == NADE_MOLOTOV)
+    {
+        // Molotov / Incendiary Grenade: bursts into flames and creates an area-denial firezone
+        particle_splash(PART_SPARK, 60, 400, o);
+        particle_fireball(PART_FIREBALL, o);
+        addscorchmark(o);
+        adddynlight(NULL, o, 18, 500, 300, 255, 140, 20);
+        create_firezone(o, owner);
         return;
     }
 
@@ -1495,9 +1702,25 @@ void grenades::thrownade()
     if(!inhandnade) return;
     const float speed = cosf(RAD*owner->pitch);
     vec lvel(sinf(RAD*owner->yaw)*speed, -cosf(RAD*owner->yaw)*speed, sinf(RAD*owner->pitch));
-    lvel.mul(1.5f);
+    if(underhand_throw && owner == player1 && player1->attacking)
+    {
+        // Medium throw (holding both primary and secondary)
+        lvel.mul(1.0f);
+        lvel.z += 0.10f;
+    }
+    else if(underhand_throw)
+    {
+        // Underhand lob (short throw ~38% velocity)
+        lvel.mul(0.55f);
+        lvel.z += 0.20f;
+    }
+    else
+    {
+        lvel.mul(1.5f);
+    }
     vec uvel(int(lvel.x*DNF)/DNF,int(lvel.y*DNF)/DNF,int(lvel.z*DNF)/DNF); // force universal granularity 
     thrownade(uvel);
+    underhand_throw = false;
 }
 
 void grenades::thrownade(const vec &vel)
@@ -1531,7 +1754,7 @@ void grenades::renderstats()
 }
 
 bool grenades::selectable() { return weapon::selectable() && state != GST_INHAND && mag; }
-void grenades::reset() { throwmillis = 0; cookingmillis = 0; quicknade = false; state = GST_NONE; }
+void grenades::reset() { throwmillis = 0; cookingmillis = 0; quicknade = false; underhand_throw = false; state = GST_NONE; }
 
 void grenades::onselecting(bool sound)
 {
@@ -1919,19 +2142,40 @@ void togglescope()
 
 COMMAND(togglescope, "");
 
-void do_altaction()
+void do_altaction(bool on)
 {
     if(!player1 || player1->state != CS_ALIVE) return;
 
     // 1. Right-click ALWAYS toggles scope when holding sniper rifle
     if(player1->weaponsel && player1->weaponsel->type == GUN_SNIPER)
     {
-        togglescope();
+        if(on) togglescope();
         return;
     }
 
-    // 2. In bomb mode, check if near bomb or interacting with bomb
-    if(m_bomb)
+    // 2. Right-click when holding grenade: Underhand Lob (short throw)
+    if(player1->weaponsel && player1->weaponsel->type == GUN_GRENADE)
+    {
+        if(on)
+        {
+            if(player1->weapons[GUN_GRENADE]->mag > 0)
+            {
+                underhand_throw = true;
+                attack(true);
+            }
+        }
+        else
+        {
+            if(underhand_throw)
+            {
+                attack(false);
+            }
+        }
+        return;
+    }
+
+    // 3. In bomb mode, check if near bomb or interacting with bomb
+    if(m_bomb && on)
     {
         flaginfo &f = flaginfos[0];
         bool near_bomb = (f.state == CTFF_INBASE && f.actor == player1) ||
@@ -1944,15 +2188,37 @@ void do_altaction()
         }
     }
 
-    // 3. Otherwise execute weapon-specific altaction alias
-    defformatstring(aliascmd)("altaction_%d", player1->weaponsel ? player1->weaponsel->type : 0);
-    const char *action = getalias(aliascmd);
-    if(action && action[0])
+    // 4. Otherwise execute weapon-specific altaction alias
+    if(on)
     {
-        execute(action);
+        defformatstring(aliascmd)("altaction_%d", player1->weaponsel ? player1->weaponsel->type : 0);
+        const char *action = getalias(aliascmd);
+        if(action && action[0])
+        {
+            execute(action);
+        }
     }
 }
-COMMANDN(altaction, do_altaction, "");
+COMMANDN(altaction, do_altaction, "d");
+
+void underhandthrow(bool on)
+{
+    if(player1->state != CS_ALIVE) return;
+    if(on)
+    {
+        if(player1->weapons[GUN_GRENADE]->mag > 0)
+        {
+            if(player1->weaponsel->type != GUN_GRENADE) selectweapon(player1->weapons[GUN_GRENADE]);
+            underhand_throw = true;
+            attack(true);
+        }
+    }
+    else
+    {
+        attack(false);
+    }
+}
+COMMAND(underhandthrow, "d");
 
 void shoot(playerent *p, vec &targ)
 {

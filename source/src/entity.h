@@ -726,7 +726,7 @@ struct hitmsg
     ivec dir;
 };
 
-enum { NADE_HE = 0, NADE_SMOKE, NADE_FLASH };
+enum { NADE_HE = 0, NADE_SMOKE, NADE_FLASH, NADE_MOLOTOV };
 
 class grenadeent : public bounceent
 {
