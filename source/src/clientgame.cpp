@@ -900,13 +900,7 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
     if(!mapcenter)
     {
         int type = m_teammode ? team_base(d->team) : 100;
-        if(m_arena && arenaspawn >= 0)
-        {
-            int x = -1;
-            loopi(arenaspawn + 1) x = findentity(PLAYERSTART, x+1, type);
-            if(x >= 0) e = &ents[x];
-        }
-        else if(m_teammode && (type == 0 || type == 1))
+        if(m_teammode && (type == 0 || type == 1))
         {
             // Designated Team Spawns: All members of a team spawn strictly at their designated team base!
             vector<int> team_spawns;
@@ -917,16 +911,22 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
             }
             if(team_spawns.length() > 0)
             {
-                static int team_cycle[2] = { -1, -1 };
-                team_cycle[type] = (team_cycle[type] + 1) % team_spawns.length();
-                e = &ents[team_spawns[team_cycle[type]]];
+                if(arenaspawn >= 0)
+                {
+                    e = &ents[team_spawns[arenaspawn % team_spawns.length()]];
+                }
+                else
+                {
+                    static int team_cycle[2] = { -1, -1 };
+                    team_cycle[type] = (team_cycle[type] + 1) % team_spawns.length();
+                    e = &ents[team_spawns[team_cycle[type]]];
+                }
             }
             else
             {
                 // Fallback for maps without team tags: partition by designated team base
                 if(!team_spawn_base_init[0] || !team_spawn_base_init[1]) init_team_spawns();
-                float closest_dist = -1.0f;
-                int closest_spawn = -1;
+                vector<int> partitioned_spawns;
                 loopv(ents)
                 {
                     if(ents[i].type == PLAYERSTART)
@@ -935,17 +935,21 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
                         float d_team = spos.dist(team_spawn_base[type]);
                         float d_enemy = spos.dist(team_spawn_base[1 - type]);
                         if(d_team <= d_enemy)
-                        {
-                            if(closest_spawn < 0 || d_team < closest_dist)
-                            {
-                                closest_dist = d_team;
-                                closest_spawn = i;
-                            }
-                        }
+                            partitioned_spawns.add(i);
                     }
                 }
-                if(closest_spawn >= 0) e = &ents[closest_spawn];
+                if(partitioned_spawns.length() > 0)
+                {
+                    int idx = (arenaspawn >= 0) ? (arenaspawn % partitioned_spawns.length()) : rnd(partitioned_spawns.length());
+                    e = &ents[partitioned_spawns[idx]];
+                }
             }
+        }
+        else if(m_arena && arenaspawn >= 0)
+        {
+            int x = -1;
+            loopi(arenaspawn + 1) x = findentity(PLAYERSTART, x+1, type);
+            if(x >= 0) e = &ents[x];
         }
         else if((m_teammode || m_arena) && !m_ktf) // ktf uses ffa spawns
         {

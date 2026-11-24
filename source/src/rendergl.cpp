@@ -471,7 +471,7 @@ void fixresizedscreen()
 
 void fovchanged();
 FVARFP(fov, 75, 90, 120, fovchanged());
-VARFP(scopefov, 5, 50, 60, fovchanged());
+VARFP(scopefov, 5, 40, 60, fovchanged());
 VARP(spectfov, 5, 110, 120);
 VARP(spectfovremote, 0, 0, 1); // use spectfov or remote player's fov when spectating
 void fovchanged()

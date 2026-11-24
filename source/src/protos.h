@@ -615,6 +615,7 @@ struct bombinfo_s
 extern bombinfo_s bombinfo;
 extern void bombinfochanged(int oldstate);
 extern void bombcarrierchanged(int oldcarrier);
+extern void bombaction();
 extern void flagpickup(int fln);
 extern void tryflagdrop(bool manual = false);
 extern void flagreturn(int fln);

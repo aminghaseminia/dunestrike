@@ -1667,6 +1667,21 @@ void sniperrifle::attackfx(const vec &from, const vec &to, int millis)
     attacksound();
 }
 
+bool sniperrifle::attack(vec &targ)
+{
+    bool res = gun::attack(targ);
+    if(res)
+    {
+        // CS sniper rifle bolt-action cycle: drops scope immediately upon firing
+        if(scoped)
+        {
+            scoped = false;
+            owner->scoping = false;
+        }
+    }
+    return res;
+}
+
 bool sniperrifle::reload(bool autoreloaded)
 {
     bool r = weapon::reload(autoreloaded);
@@ -1887,6 +1902,41 @@ void togglescope()
 }
 
 COMMAND(togglescope, "");
+
+void do_altaction()
+{
+    if(!player1 || player1->state != CS_ALIVE) return;
+
+    // 1. Right-click ALWAYS toggles scope when holding sniper rifle
+    if(player1->weaponsel && player1->weaponsel->type == GUN_SNIPER)
+    {
+        togglescope();
+        return;
+    }
+
+    // 2. In bomb mode, check if near bomb or interacting with bomb
+    if(m_bomb)
+    {
+        flaginfo &f = flaginfos[0];
+        bool near_bomb = (f.state == CTFF_INBASE && f.actor == player1) ||
+                         (f.state == CTFF_DROPPED && f.pos.dist(player1->o) <= 24.0f) ||
+                         (f.state == CTFF_STOLEN && f.pos.dist(player1->o) <= 24.0f);
+        if(near_bomb)
+        {
+            bombaction();
+            return;
+        }
+    }
+
+    // 3. Otherwise execute weapon-specific altaction alias
+    defformatstring(aliascmd)("altaction_%d", player1->weaponsel ? player1->weaponsel->type : 0);
+    const char *action = getalias(aliascmd);
+    if(action && action[0])
+    {
+        execute(action);
+    }
+}
+COMMANDN(altaction, do_altaction, "");
 
 void shoot(playerent *p, vec &targ)
 {

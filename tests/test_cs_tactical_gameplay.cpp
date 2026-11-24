@@ -25,18 +25,24 @@ void test_sniper_toggle_scope_and_tracer() {
     bool found_togglescope = false;
     bool found_supersonic_comment = false;
     bool has_obstructive_smoke_trail = false;
+    bool found_altaction_command = false;
+    bool found_sniper_attack_unzoom = false;
 
     while (std::getline(file, line)) {
         if (line.find("void sniperrifle::togglescope()") != std::string::npos) found_togglescope = true;
         if (line.find("Supersonic sniper bullet tracer") != std::string::npos) found_supersonic_comment = true;
         if (line.find("particle_trail(PART_SMOKE") != std::string::npos) has_obstructive_smoke_trail = true;
+        if (line.find("COMMANDN(altaction, do_altaction") != std::string::npos) found_altaction_command = true;
+        if (line.find("bool sniperrifle::attack") != std::string::npos) found_sniper_attack_unzoom = true;
     }
     file.close();
 
     assert(found_togglescope);
     assert(found_supersonic_comment);
     assert(!has_obstructive_smoke_trail); // Obstruction removed
-    std::cout << "  -> PASS: Sniper rifle now toggles scope on click and fires a clean supersonic tracer line!\n";
+    assert(found_altaction_command); // Native C++ altaction guarantees right-click sniper scope
+    assert(found_sniper_attack_unzoom); // Sniper shot unzooms during bolt cycle
+    std::cout << "  -> PASS: Sniper rifle now toggles scope natively on right-click, unzooms on shot, and fires a clean supersonic tracer line!\n";
 }
 
 // Test 2: Smoke grenade and Flashbang implementation

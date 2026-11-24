@@ -1639,9 +1639,14 @@ void distributeteam(int team)
         sdistrib.add(ti);
     }
     sdistrib.sort(cmpintasc); // random spawn order
+    int c_idx = 0;
     loopv(clients)
     {
-        clients[i]->spawnindex = sdistrib[i % sdistrib.length()].val;
+        if(clients[i]->type != ST_EMPTY && (team == 100 || (team_isactive(clients[i]->team) && team_base(clients[i]->team) == team)))
+        {
+            clients[i]->spawnindex = sdistrib[c_idx % sdistrib.length()].val;
+            c_idx++;
+        }
     }
 }
 
