@@ -1384,7 +1384,12 @@ void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bo
     {
         if(pl != actor) updatedmgindicator(pl, actor->o);
         damageblend(damage, pl);
-        pl->damageroll(damage);
+        pl->aimpunch(damage, zone);
+    }
+
+    if(zone == HITZONE_HEAD && pl->has_helmet && pl->armour > 0)
+    {
+        audiomgr.playsound(S_ITEMHELMET, pl, SP_HIGH);
     }
 
     if(pl->health<=0) { if(local) dokill(pl, actor, gib, gun >= 0 ? gun : actor->weaponsel->type, zone); }
@@ -2384,13 +2389,18 @@ static void hitzoneselftestfn()
     // armor_absorb = 60 - 42 = 18.
     // armor_dmg = ceil(18 * 0.5) = 9.
     playerstate ps;
-    ps.health = 100; ps.armour = 100;
+    ps.health = 100; ps.armour = 100; ps.has_helmet = true;
     int dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
     if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
-    ps.health = 100; ps.armour = 100;
+    // Unarmored headshot without helmet takes full 60 damage directly to health:
+    playerstate ps_no_helm;
+    ps_no_helm.health = 100; ps_no_helm.armour = 100; ps_no_helm.has_helmet = false;
+    int dmg_no_helm = ps_no_helm.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
+    if(dmg_no_helm != 60 || ps_no_helm.health != 40 || ps_no_helm.armour != 100) { failures++; conoutf("hitzone FAIL head no-helmet: dmg %d", dmg_no_helm); }
+    ps.health = 100; ps.armour = 100; ps.has_helmet = true;
     dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_TORSO);
     if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
-    ps.health = 100; ps.armour = 100;
+    ps.health = 100; ps.armour = 100; ps.has_helmet = true;
     dmg = ps.dodamage(INT_MAX, GUN_KNIFE, HITZONE_TORSO);
     if(dmg != 100 || ps.health != 0 || ps.armour != 0) { failures++; conoutf("hitzone FAIL suicide"); }
 

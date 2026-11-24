@@ -691,7 +691,7 @@ void hit(int damage, playerent *d, playerent *at, const vec &vel, int gun, bool 
         if(d==player1)
         {
             h.dir = ivec(0, 0, 0);
-            d->damageroll(damage);
+            d->aimpunch(damage, zone);
             if(d != at) updatedmgindicator(player1, at->o);
             damageblend(damage, d);
             damageeffect(damage, d);

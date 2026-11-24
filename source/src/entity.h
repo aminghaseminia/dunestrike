@@ -319,13 +319,14 @@ class playerstate
 {
 public:
     int health, armour;
+    bool has_helmet;
     int primary, nextprimary;
     int gunselect;
     bool akimbo;
     int ammo[NUMGUNS], mag[NUMGUNS], gunwait[NUMGUNS];
     int pstatshots[NUMGUNS], pstatdamage[NUMGUNS];
 
-    playerstate() : armour(0), primary(GUN_ASSAULT), nextprimary(GUN_ASSAULT), akimbo(false) {}
+    playerstate() : armour(0), has_helmet(false), primary(GUN_ASSAULT), nextprimary(GUN_ASSAULT), akimbo(false) {}
     virtual ~playerstate() {}
 
     void resetstats() { loopi(NUMGUNS) pstatshots[i] = pstatdamage[i] = 0; }
@@ -355,7 +356,7 @@ public:
             case I_AMMO: return ammo[primary]<ammostats[primary].max;
             case I_GRENADE: return mag[GUN_GRENADE]<ammostats[GUN_GRENADE].max;
             case I_HEALTH: return health<powerupstats[type-I_HEALTH].max;
-            case I_HELMET:
+            case I_HELMET: return !has_helmet || armour<powerupstats[type-I_HEALTH].max;
             case I_ARMOUR: return armour<powerupstats[type-I_HEALTH].max;
             case I_AKIMBO: return !akimbo;
             default: return false;
@@ -380,6 +381,8 @@ public:
             case I_GRENADE: additem(ammostats[GUN_GRENADE], mag[GUN_GRENADE]); break;
             case I_HEALTH: additem(powerupstats[type-I_HEALTH], health); break;
             case I_HELMET:
+                has_helmet = true;
+                additem(powerupstats[type-I_HEALTH], armour); break;
             case I_ARMOUR:
                 additem(powerupstats[type-I_HEALTH], armour); break;
             case I_AKIMBO:
@@ -394,6 +397,7 @@ public:
     {
         health = 100;
         armour = 0;
+        has_helmet = false;
         gunselect = GUN_PISTOL;
         akimbo = false;
         loopi(NUMGUNS) ammo[i] = mag[i] = gunwait[i] = 0;
@@ -422,10 +426,11 @@ public:
         gunselect = primary;
 
         if(m_osok) health = 1;
-        if(m_lms) // Survivor && Team-Survivor : 2010nov19
+        if(m_lms || m_bomb) // Survivor && Team-Survivor & Bomb defusal
         {
             health = 100;
             armour = 100;
+            has_helmet = true; // CS standard competitive round spawn loadout: Kevlar + Helmet
             ammo[GUN_GRENADE] = 2;
         }
     }
@@ -437,24 +442,25 @@ public:
         {
             damage = health;
             armour = health = 0;
+            has_helmet = false;
             return damage;
         }
 
         guninfo gi = valid_weapon(gun) ? guns[gun] : guns[GUN_PISTOL];
 
-        // Headshots without armor/helmet take unmitigated head damage
-        if(zone == HITZONE_HEAD && armour <= 0)
+        // Headshots:
+        if(zone == HITZONE_HEAD)
         {
-            health -= damage;
-            return damage;
-        }
+            // If target does NOT have a helmet or armor is depleted, take 100% full unmitigated head damage (CS 1-tap)
+            if(!has_helmet || armour <= 0)
+            {
+                health -= damage;
+                return damage;
+            }
 
-        // Armor mitigation:
-        // In CS, armor penetration (gi.piercing) represents % of damage penetrating armor to health.
-        // e.g., 77.5% piercing means 77.5% damage goes to health, 22.5% absorbed by armor.
-        // Armor durability depleted = (damage absorbed) / 2.
-        if(armour > 0)
-        {
+            // Target has Kevlar + Helmet:
+            // Armor penetration (gi.piercing) represents % of damage penetrating helmet to health.
+            // e.g., M4A1 (70% piercing) leaves target alive with ~8 HP; AK-47 (78% piercing) one-taps.
             float pen = clamp(float(gi.piercing) / 100.0f, 0.0f, 1.0f);
             int health_dmg = (int)ceil(damage * pen);
             int armor_absorb = damage - health_dmg;
@@ -467,12 +473,43 @@ public:
             }
             else
             {
-                // Armor exhausted during this hit
+                // Armor & helmet exhausted during this hit
                 damage = health_dmg + (armor_dmg - armour) * 2;
                 armour = 0;
+                has_helmet = false;
+            }
+
+            health -= damage;
+            return damage;
+        }
+
+        // Torso & Stomach (protected by Kevlar body armor):
+        if(zone == HITZONE_TORSO || zone == HITZONE_STOMACH)
+        {
+            if(armour > 0)
+            {
+                float pen = clamp(float(gi.piercing) / 100.0f, 0.0f, 1.0f);
+                int health_dmg = (int)ceil(damage * pen);
+                int armor_absorb = damage - health_dmg;
+                int armor_dmg = max(1, (int)ceil(armor_absorb * 0.5f));
+
+                if(armour >= armor_dmg)
+                {
+                    armour -= armor_dmg;
+                    damage = health_dmg;
+                }
+                else
+                {
+                    damage = health_dmg + (armor_dmg - armour) * 2;
+                    armour = 0;
+                    has_helmet = false;
+                }
+                health -= damage;
+                return damage;
             }
         }
 
+        // Legs and Arms: unmitigated by Kevlar (in CS, limb shots bypass armor)
         health -= damage;
         return damage;
     }
@@ -565,6 +602,29 @@ public:
     {
         damage *= effroll > 0.001f || (effroll > -0.001f && rnd(2)) ? 2.0f : -2.0f; // give player a kick
         effroll = clamp(effroll + damage, -maxrolleffect, maxrolleffect);
+    }
+
+    void aimpunch(int damage, int zone = HITZONE_TORSO)
+    {
+        bool has_protection = false;
+        if(zone == HITZONE_HEAD) has_protection = has_helmet && armour > 0;
+        else if(zone == HITZONE_TORSO || zone == HITZONE_STOMACH) has_protection = armour > 0;
+
+        if(has_protection)
+        {
+            // Protected by Kevlar / Helmet: aim punch is virtually eliminated (5% roll kick, 0 pitch kick)
+            damageroll(damage * 0.05f);
+        }
+        else
+        {
+            // Unarmored: severe CS-style aim punch flinch
+            damageroll(damage);
+            extern physent *camera1;
+            if(this == camera1)
+            {
+                pitch += min(float(damage) * 0.15f, 5.0f); // camera kicks up
+            }
+        }
     }
 
     void hitpush(int damage, const vec &dir, playerent *actor, int gun)

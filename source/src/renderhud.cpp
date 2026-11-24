@@ -1432,9 +1432,16 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 defformatstring(buyinfo)("\f0[BUY ZONE: Press B (%ds)]", secs_left);
                 draw_text(buyinfo, 48, 760);
             }
+            int badge_x = 48;
             if(p->has_defuse_kit && team_base(p->team) == 1)
             {
-                draw_text("\f0[KIT]", 48, 790);
+                draw_text("\f0[KIT]", badge_x, 790);
+                badge_x += 65;
+            }
+            if(p->armour > 0)
+            {
+                if(p->has_helmet) draw_text("\f0[HELMET]", badge_x, 790);
+                else draw_text("\f4[KEVLAR]", badge_x, 790);
             }
             pushfont("huddigits");
             draw_textf("%d", HUDPOS_HEALTH + HUDPOS_NUMBERSPACING, 823, p->health);

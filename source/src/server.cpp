@@ -784,6 +784,7 @@ void sendspawn(client *c)
     gs.respawn();
     gs.spawnstate(sg->smode);
     gs.has_defuse_kit = (team_base(c->team) == TEAM_RVSF);
+    gs.has_helmet = (gs.armour > 0);
     gs.lifesequence++;
     sendf(c->clientnum, 1, "ri7vv", SV_SPAWNSTATE, gs.lifesequence,
         gs.health, gs.armour,
