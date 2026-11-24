@@ -990,6 +990,29 @@ static float getpenfactor(int gun)
     }
 }
 
+static float getmaterialpenfactor(const vec &p)
+{
+    if(p.x < 0 || p.x >= ssize || p.y < 0 || p.y >= ssize) return 1.0f;
+    sqr *s = S((int)p.x, (int)p.y);
+    if(!s) return 1.0f;
+    int texids[4] = { s->wtex, s->utex, s->ftex, s->ctex };
+    for(int i = 0; i < 4; i++)
+    {
+        if(texids[i] == DEFAULT_SKY) continue;
+        Texture *t = lookupworldtexture(texids[i], false);
+        if(t && t != noworldtexture && t->name)
+        {
+            const char *n = t->name;
+            if(strstr(n, "crate") || strstr(n, "wood") || strstr(n, "box") ||
+               strstr(n, "door") || strstr(n, "panel") || strstr(n, "board") || strstr(n, "plank"))
+            {
+                return 1.4f; // 40% penetration bonus for wood, crates, and doors
+            }
+        }
+    }
+    return 1.0f;
+}
+
 void raydamage(vec &from, vec &to, playerent *d)
 {
     int dam = d->weaponsel->info.damage;
@@ -1096,11 +1119,14 @@ void raydamage(vec &from, vec &to, playerent *d)
             if(dist > 0.001f)
             {
                 dir.div(dist); // unit vector along bullet trajectory
+                vec inward = vec(to).add(vec(dir).mul(0.1f));
+                float mat_bonus = max(getmaterialpenfactor(to), getmaterialpenfactor(inward));
+                float eff_max_pen = max_pen * mat_bonus;
                 float step = 0.15f;
                 float pen_dist = 0.0f;
                 vec exit_pos = to;
                 bool penetrated = false;
-                for(float cur = step; cur <= max_pen; cur += step)
+                for(float cur = step; cur <= eff_max_pen; cur += step)
                 {
                     vec test_p = vec(to).add(vec(dir).mul(cur));
                     if(!ispointsolid(test_p))
@@ -1121,7 +1147,7 @@ void raydamage(vec &from, vec &to, playerent *d)
                     if(wb_target)
                     {
                         if(wb_zone < HITZONE_TORSO || wb_zone >= NUMHITZONES) wb_zone = HITZONE_TORSO;
-                        float pen_eff = getpenfactor(gun) * (1.0f - (pen_dist / max_pen) * 0.4f);
+                        float pen_eff = getpenfactor(gun) * mat_bonus * (1.0f - (pen_dist / eff_max_pen) * 0.4f);
                         int wb_dam = (int)(dam * pen_eff * hitzonescale(wb_zone) + 0.5f);
                         if(wb_dam < 1) wb_dam = 1;
                         bool gib = (gun == GUN_SNIPER && wb_zone == HITZONE_HEAD && wb_dam >= wb_target->health);
@@ -1129,7 +1155,10 @@ void raydamage(vec &from, vec &to, playerent *d)
                         if(d == player1)
                         {
                             hit = true;
-                            conoutf("\f0[WALLBANG] Penetrated wall (%.1f units) - hit %s for %d damage!", pen_dist, colorname(wb_target), wb_dam);
+                            if(mat_bonus > 1.0f)
+                                conoutf("\f0[WALLBANG] Penetrated wall (crate/wood: %.1f units) - hit %s for %d damage!", pen_dist, colorname(wb_target), wb_dam);
+                            else
+                                conoutf("\f0[WALLBANG] Penetrated wall (%.1f units) - hit %s for %d damage!", pen_dist, colorname(wb_target), wb_dam);
                         }
                         hitscount++;
                         particle_splash(PART_SPARK, 12, 220, exit_pos);

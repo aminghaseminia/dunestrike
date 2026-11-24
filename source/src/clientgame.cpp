@@ -683,7 +683,7 @@ static void bombcheck()
             if(bombinfo.sites[i].x >= 0)
             {
                 float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
-                if(dx*dx + dy*dy <= 9.0f) // matches the server's default bomb_siteradius
+                if(dx*dx + dy*dy <= 16.0f) // matches the server's competitive bomb_siteradius (4.0 units)
                 {
                     atsite = i;
                     break;

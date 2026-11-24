@@ -1754,13 +1754,13 @@ static inline int bomb_get_halftimerounds()
     return bomb_halftime > 0 ? bomb_halftime : (bomb_roundlimit > 1 ? bomb_roundlimit - 1 : 1);
 }
 SERVPAR(bomb_startdelay, 0, 3, 30, "DSeconds before the first bomb defusal round starts");
-SERVPAR(bomb_roundtime, 30, 90, 900, "DSeconds in a bomb defusal round before defenders win");
+SERVPAR(bomb_roundtime, 30, 115, 900, "DSeconds in a bomb defusal round before defenders win");
 SERVPAR(bomb_planttime, 1, 3, 30, "DSeconds needed to plant the bomb");
 SERVPAR(bomb_defusetime, 1, 5, 30, "DSeconds needed to defuse the bomb");
 SERVPAR(bomb_timer, 10, 40, 180, "DSeconds from planting until the bomb explodes");
-SERVPAR(bomb_siteradius, 1, 3, 20, "DMaximum distance from a bomb site centre");
+SERVPAR(bomb_siteradius, 1, 4, 20, "DMaximum distance from a bomb site centre");
 SERVPAR(bomb_pickupradius, 1, 3, 20, "DMaximum distance to pick up a dropped bomb");
-SERVPAR(bomb_exploderadius, 1, 18, 100, "DRadius of the bomb explosion");
+SERVPAR(bomb_exploderadius, 1, 24, 100, "DRadius of the bomb explosion");
 SERVPAR(bomb_explodedamage, 0, 200, 1000, "DDamage at the centre of the bomb explosion");
 
 static int bombsiteat(const vec &o)

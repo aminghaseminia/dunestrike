@@ -27,6 +27,7 @@ clang++ -O2 -Wall "$DIR/test_buyzone_restrictions.cpp" -o "$DIR/test_buyzone_res
 clang++ -O2 -Wall "$DIR/test_weapons_overhaul.cpp" -o "$DIR/test_weapons_overhaul"
 clang++ -O2 -Wall "$DIR/test_gunplay_wallbang_molotov.cpp" -o "$DIR/test_gunplay_wallbang_molotov"
 clang++ -O2 -Wall "$DIR/test_round_flow_mvp_freezetime.cpp" -o "$DIR/test_round_flow_mvp_freezetime"
+clang++ -O2 -Wall "$DIR/test_tactical_map_competitive.cpp" -lz -o "$DIR/test_tactical_map_competitive"
 
 echo "[RUN] Running test_cs_tactical_gameplay..."
 "$DIR/test_cs_tactical_gameplay"
@@ -82,6 +83,12 @@ echo "[RUN] Running test_gunplay_wallbang_molotov..."
 
 echo "[RUN] Running test_round_flow_mvp_freezetime..."
 "$DIR/test_round_flow_mvp_freezetime"
+
+echo "[RUN] Running test_tactical_map_competitive..."
+"$DIR/test_tactical_map_competitive"
+
+echo "[RUN] Running test_cs_dust2_sites.py..."
+python3 "$DIR/test_cs_dust2_sites.py"
 
 echo "[RUN] Running test_cs_tactical_gameplay..."
 "$DIR/test_cs_tactical_gameplay"
