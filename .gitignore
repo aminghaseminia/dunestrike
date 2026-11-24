@@ -45,7 +45,7 @@ profile/*
 logs/*
 private/*
 .DS_Store
-tests/test_bombsite
-tests/test_bomb_dual_site
-tests/test_halftime_match
-tests/test_gunplay_movement
+tests/test_*
+!tests/test_*.cpp
+!tests/test_*.h
+!tests/test_*.py
