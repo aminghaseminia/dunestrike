@@ -246,7 +246,7 @@ float location::offset()
 
 void location::drop()
 {
-    src->stop();
+    if(src) src->stop();
     stale = true; // drop from collection on next update cycle
 }
 
@@ -259,7 +259,7 @@ location *locvector::find(int sound, worldobjreference *ref, const vector<soundc
     loopi(ulen) if(buf[i] && !buf[i]->stale)
     {
         if(buf[i]->cfg != &soundcollection[sound]) continue; // check if its the same sound
-        if(ref && *buf[i]->ref!=*ref) continue; // optionally check if its the same reference
+        if(ref && (!buf[i]->ref || *buf[i]->ref!=*ref)) continue; // optionally check if its the same reference
         return buf[i]; // found
     }
     return NULL;
