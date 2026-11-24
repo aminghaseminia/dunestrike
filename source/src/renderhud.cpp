@@ -98,6 +98,7 @@ void drawscope(bool preload)
     static Texture *scopetex = NULL;
     if(!scopetex) scopetex = textureload("packages/misc/scope.png", 3);
     if(preload) return;
+    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBindTexture(GL_TEXTURE_2D, scopetex->id);
     glColor3ub(255, 255, 255);
@@ -159,6 +160,18 @@ void drawscope(bool preload)
     }
 
     glEnable(GL_BLEND);
+
+    // Classic CS crosshair lines across sniper optic
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(0.0f, 0.0f, 0.0f, 0.85f);
+    glLineWidth(2.5f);
+    glBegin(GL_LINES);
+    glVertex2f(0, VIRTH/2);
+    glVertex2f(VIRTW, VIRTH/2);
+    glVertex2f(VIRTW/2, 0);
+    glVertex2f(VIRTW/2, VIRTH);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
 }
 
 const char *crosshairnames[CROSSHAIR_NUM + 1];  // filled in main.cpp

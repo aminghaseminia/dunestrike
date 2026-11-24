@@ -90,6 +90,22 @@ void dropweapon()
 }
 COMMAND(dropweapon, "");
 
+void forceweapon(int *gun)
+{
+    if(!player1 || player1->state != CS_ALIVE || !gun) return;
+    int g = *gun;
+    if(g >= 0 && g < NUMGUNS && player1->weapons[g])
+    {
+        player1->primweap = player1->weapons[g];
+        player1->weaponsel = player1->weapons[g];
+        player1->gunselect = g;
+        player1->nextweaponsel = NULL;
+        player1->weaponchanging = 0;
+        player1->weaponsel->onselecting(false);
+    }
+}
+COMMAND(forceweapon, "i");
+
 void shiftweapon(int *s)
 {
     if(keypressed && player1->state == CS_ALIVE && !ispaused)
@@ -144,15 +160,15 @@ void quicknadethrow(bool on)
         if(player1->weapons[GUN_GRENADE]->mag > 0)
         {
             if(player1->weaponsel->type != GUN_GRENADE) selectweapon(player1->weapons[GUN_GRENADE]);
-            if(player1->weaponsel->type == GUN_GRENADE || player1->nextweaponsel->type == GUN_GRENADE)
+            if(player1->weaponsel->type == GUN_GRENADE || (player1->nextweaponsel && player1->nextweaponsel->type == GUN_GRENADE))
             {
-                if(!(player1->weaponsel->type == GUN_GRENADE && player1->nextweaponsel->type != GUN_GRENADE)) attack(true);
+                if(!(player1->weaponsel->type == GUN_GRENADE && player1->nextweaponsel && player1->nextweaponsel->type != GUN_GRENADE)) attack(true);
             }
         }
     }
     else
     {
-        if(player1->weaponsel->type == GUN_GRENADE || player1->nextweaponsel->type == GUN_GRENADE)
+        if(player1->weaponsel->type == GUN_GRENADE || (player1->nextweaponsel && player1->nextweaponsel->type == GUN_GRENADE))
         {
             attack(false);
             quicknade = true;
@@ -161,9 +177,9 @@ void quicknadethrow(bool on)
 }
 COMMAND(quicknadethrow, "d");
 
-COMMANDF(currentprimary, "", () { intret(player1->primweap->type); });
-COMMANDF(prevweapon, "", () { intret(player1->prevweaponsel->type); });
-COMMANDF(curweapon, "", () { intret(player1->weaponsel->type); });
+COMMANDF(currentprimary, "", () { intret(player1 && player1->primweap ? player1->primweap->type : -1); });
+COMMANDF(prevweapon, "", () { intret(player1 && player1->prevweaponsel ? player1->prevweaponsel->type : -1); });
+COMMANDF(curweapon, "", () { intret(player1 && player1->weaponsel ? player1->weaponsel->type : -1); });
 
 COMMANDF(magcontent, "s", (char *ws)
 {
@@ -1887,7 +1903,7 @@ void knife::renderstats() { }
 
 void setscope(bool enable)
 {
-    if(player1->weaponsel->type != GUN_SNIPER) return;
+    if(!player1 || !player1->weaponsel || player1->weaponsel->type != GUN_SNIPER) return;
     sniperrifle *sr = (sniperrifle *)player1->weaponsel;
     sr->setscope(enable);
 }
@@ -1896,7 +1912,7 @@ COMMANDF(setscope, "i", (int *on) { setscope(*on != 0); });
 
 void togglescope()
 {
-    if(player1->weaponsel->type != GUN_SNIPER) return;
+    if(!player1 || !player1->weaponsel || player1->weaponsel->type != GUN_SNIPER) return;
     sniperrifle *sr = (sniperrifle *)player1->weaponsel;
     sr->togglescope();
 }

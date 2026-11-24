@@ -470,6 +470,7 @@ void screenshot(const char *filename)
     else if(getclientmap()[0]) formatstring(buf)("screenshots/%s_%s_%s%s", timestring(), behindpath(getclientmap()), modestr(gamemode, true), getscrext());
     else formatstring(buf)("screenshots/%s%s", timestring(), getscrext());
     path(buf);
+    gl_drawframe(screenw, screenh, 1.0f, 60.0f, 0);
     mapscreenshot(buf, false, screenshottype, screenshotscale, 0, jpegquality);
 }
 COMMAND(screenshot, "s");
