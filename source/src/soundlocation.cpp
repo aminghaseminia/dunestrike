@@ -114,6 +114,17 @@ void location::updatepos()
         else forcedvol = 1.0f-(dist/cfg->audibleradius);
     }
 
+    // CS-style Spatial Audio Occlusion: attenuate and muffle 3D sounds behind walls
+    float occlusion_factor = 1.0f;
+    if(!ref->nodistance() && camera1)
+    {
+        float dist = camera1->o.dist(pos);
+        if(dist > 1.5f && !raycubelos(camera1->o, pos, 0.5f))
+        {
+            occlusion_factor = 0.55f; // 45% volume attenuation through solid walls
+        }
+    }
+
     // reference determines the used model
     switch(ref->type)
     {
@@ -121,7 +132,13 @@ void location::updatepos()
         case worldobjreference::WR_PHYSENT:
         {
             if(!ref->nodistance()) src->position(pos);
-            if(volumeadjust) setvolume(forcedvol);
+            if(volumeadjust) setvolume(forcedvol * occlusion_factor);
+            else if(!ref->nodistance()) setvolume(occlusion_factor);
+            if(!ref->nodistance())
+            {
+                float basepitch = audiomgr.getpitch();
+                src->pitch(occlusion_factor < 1.0f ? basepitch * 0.88f : basepitch);
+            }
             break;
         }
         case worldobjreference::WR_ENTITY:
@@ -150,14 +167,25 @@ void location::updatepos()
             {
                 // use openal distance model to make the sound appear from a certain direction (non-ambient)
                 src->position(pos);
-                src->gain(vol);
+                src->gain(vol * occlusion_factor);
+                if(occlusion_factor < 1.0f)
+                {
+                    float basepitch = audiomgr.getpitch();
+                    src->pitch(basepitch * 0.88f);
+                }
             }
             break;
         }
         case worldobjreference::WR_STATICPOS:
         {
             if(!ref->nodistance()) src->position(pos);
-            if(volumeadjust) setvolume(forcedvol);
+            if(volumeadjust) setvolume(forcedvol * occlusion_factor);
+            else if(!ref->nodistance()) setvolume(occlusion_factor);
+            if(!ref->nodistance())
+            {
+                float basepitch = audiomgr.getpitch();
+                src->pitch(occlusion_factor < 1.0f ? basepitch * 0.88f : basepitch);
+            }
             break;
         }
     }

@@ -705,6 +705,9 @@ soundcfgitem soundcfg[S_NULL] =
     { "voicecom/fa_defused",      "Persian: defused",        0, 0,  0, S_FA_DEFUSED,             C(VOICECOM)|C(OTHER) },
     { "weapons/c4_beep",          "C4 Beep",                 0, 0,  0, S_C4_BEEP,                C(OTHER) },
     { "weapons/c4_plant",         "C4 Plant",                0, 0,  0, S_C4_PLANT,               C(OTHER) },
-    { "weapons/c4_disarm",        "C4 Disarm",               0, 0,  0, S_C4_DISARM,              C(OTHER) }
+    { "weapons/c4_disarm",        "C4 Disarm",               0, 0,  0, S_C4_DISARM,              C(OTHER) },
+    { "player/footsteps_wood",    "Footsteps (wood)",       40, 1, 20, S_FOOTSTEPS_WOOD,         C(MOVEMENT) },
+    { "player/footsteps_metal",   "Footsteps (metal)",      42, 1, 22, S_FOOTSTEPS_METAL,        C(MOVEMENT) },
+    { "player/footsteps_dirt",    "Footsteps (dirt)",       38, 1, 18, S_FOOTSTEPS_DIRT,         C(MOVEMENT) }
 };
 #undef C

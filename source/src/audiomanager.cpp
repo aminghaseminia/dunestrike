@@ -308,11 +308,51 @@ void audiomanager::mapsoundreset()
 VARP(footsteps, 0, 1, 1);
 VARP(localfootsteps, 0, 1, 1);
 
+int get_floor_material(const vec &pos)
+{
+    if(pos.z - 0.5f < waterlevel) return MAT_WATER;
+    int x = (int)pos.x;
+    int y = (int)pos.y;
+    if(x >= 0 && x < ssize && y >= 0 && y < ssize)
+    {
+        sqr *s = S(x, y);
+        if(s)
+        {
+            uchar tex = s->ftex;
+            if(s->type == SOLID && s->wtex) tex = s->wtex;
+            Texture *t = lookupworldtexture(tex, false);
+            if(t && t != noworldtexture && t->name)
+            {
+                char buf[128];
+                copystring(buf, t->name);
+                for(char *c = buf; *c; c++) *c = tolower(*c);
+
+                if(strstr(buf, "wood") || strstr(buf, "bois") || strstr(buf, "plank") ||
+                   strstr(buf, "crate") || strstr(buf, "box") || strstr(buf, "zaun") ||
+                   strstr(buf, "rundholz") || strstr(buf, "board"))
+                    return MAT_WOOD;
+
+                if(strstr(buf, "metal") || strstr(buf, "iron") || strstr(buf, "zinc") ||
+                   strstr(buf, "copper") || strstr(buf, "steel") || strstr(buf, "grate") ||
+                   strstr(buf, "vent") || strstr(buf, "rolltor") || strstr(buf, "wellblech") ||
+                   strstr(buf, "gully") || strstr(buf, "aircon") || strstr(buf, "panel"))
+                    return MAT_METAL;
+
+                if(strstr(buf, "dirt") || strstr(buf, "sand") || strstr(buf, "mud") ||
+                   strstr(buf, "pebble") || strstr(buf, "gravel") || strstr(buf, "grass") ||
+                   strstr(buf, "wiese") || strstr(buf, "schotter"))
+                    return MAT_DIRT;
+            }
+        }
+    }
+    return MAT_CONCRETE;
+}
+
 void audiomanager::updateplayerfootsteps(playerent *p)
 {
     if(!p || ispaused) return;
 
-    const int footstepradius = 20;
+    const int footstepradius = 24;
 
     // find existing footstep sounds
     physentreference ref(p);
@@ -321,7 +361,10 @@ void audiomanager::updateplayerfootsteps(playerent *p)
         locations.find(S_FOOTSTEPS, &ref, gamesounds),
         locations.find(S_FOOTSTEPSCROUCH, &ref, gamesounds),
         locations.find(S_WATERFOOTSTEPS, &ref, gamesounds),
-        locations.find(S_WATERFOOTSTEPSCROUCH, &ref, gamesounds)
+        locations.find(S_WATERFOOTSTEPSCROUCH, &ref, gamesounds),
+        locations.find(S_FOOTSTEPS_WOOD, &ref, gamesounds),
+        locations.find(S_FOOTSTEPS_METAL, &ref, gamesounds),
+        locations.find(S_FOOTSTEPS_DIRT, &ref, gamesounds)
     };
 
     if(intermission)
@@ -360,8 +403,25 @@ void audiomanager::updateplayerfootsteps(playerent *p)
         if(p->is_walking) return; // CS silent shift-walk: zero footstep sound emission
 
         int stepsound;
-        if(p->crouching) stepsound = water ? S_WATERFOOTSTEPSCROUCH : S_FOOTSTEPSCROUCH; // crouch
-        else stepsound = water ? S_WATERFOOTSTEPS : S_FOOTSTEPS; // normal
+        if(water)
+        {
+            stepsound = p->crouching ? S_WATERFOOTSTEPSCROUCH : S_WATERFOOTSTEPS;
+        }
+        else if(p->crouching)
+        {
+            stepsound = S_FOOTSTEPSCROUCH;
+        }
+        else
+        {
+            int mat = get_floor_material(p->o);
+            switch(mat)
+            {
+                case MAT_WOOD: stepsound = S_FOOTSTEPS_WOOD; break;
+                case MAT_METAL: stepsound = S_FOOTSTEPS_METAL; break;
+                case MAT_DIRT: stepsound = S_FOOTSTEPS_DIRT; break;
+                default: stepsound = S_FOOTSTEPS; break;
+            }
+        }
 
         // proc existing sounds
         bool isplaying = false;
@@ -369,7 +429,7 @@ void audiomanager::updateplayerfootsteps(playerent *p)
         {
             location *l = locs[i];
             if(!l) continue;
-            if(i+S_FOOTSTEPS==stepsound) isplaying = true; // already playing
+            if(l->cfg == &gamesounds[stepsound]) isplaying = true; // already playing
             else l->drop(); // different footstep sound, drop it
         }
 

@@ -948,6 +948,7 @@ extern int loadallxmaps();
 // physics
 extern float raycube(const vec &o, const vec &ray, vec &surface);
 extern bool raycubelos(const vec &from, const vec &to, float margin = 0);
+extern int get_floor_material(const vec &pos);
 extern int cornertest(int x, int y, int &bx, int &by, int &bs, sqr *&s, sqr *&h);
 extern void moveplayer(physent *pl, int moveres, bool local);
 extern void moveplayer(physent *pl, int moveres, bool local, int curtime);
