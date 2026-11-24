@@ -641,7 +641,7 @@ public:
     int skin(int t = -1) { return nextskin[team_base(t < 0 ? team : t)]; }
     void setskin(int t, int s)
     {
-        const int maxskin[2] = { 4, 4 }; // CS 1.6 Factions (0..3) for CT and T
+        const int maxskin[2] = { 2, 3 }; // CLA has 2 skins (0..1), RVSF has 3 skins (0..2)
         t = team_base(t < 0 ? team : t);
         nextskin[t] = (s & 63) % maxskin[t];
     }

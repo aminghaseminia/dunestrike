@@ -61,41 +61,38 @@ void test_texture_files_exist() {
 
 void test_skin_selection_bounds() {
     std::cout << "[Test 2] Testing skin selection index clamping and safety...\n";
-    const int maxskin[2] = { 4, 4 };
+    const int maxskin[2] = { 2, 3 };
 
     for(int test_val = -20; test_val <= 100; ++test_val) {
         for(int team = 0; team < 2; ++team) {
             int clamped = (test_val & 63) % maxskin[team];
-            assert(clamped >= 0 && clamped < 4);
+            assert(clamped >= 0 && clamped < maxskin[team]);
 
             int skinid = 1 + clamped;
-            assert(skinid >= 1 && skinid <= 4);
+            assert(skinid >= 1 && skinid <= maxskin[team]);
         }
     }
 
-    std::cout << "  -> PASS: Faction skin IDs strictly clamped to valid range [1..4].\n";
+    std::cout << "  -> PASS: Faction skin IDs strictly clamped to valid ranges (T: 2, CT: 3).\n";
 }
 
 void test_menu_faction_names() {
-    std::cout << "[Test 3] Verifying CS 1.6 faction labels in menus_settings.cfg...\n";
+    std::cout << "[Test 3] Verifying custom faction labels in menus_settings.cfg...\n";
     std::ifstream infile(ds_path("config/menus_settings.cfg"));
     assert(infile.is_open());
 
     std::string content((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
 
     // CT factions
-    assert(content.find("Seal Team 6 (Urban)") != std::string::npos);
-    assert(content.find("GSG-9") != std::string::npos);
-    assert(content.find("SAS") != std::string::npos);
-    assert(content.find("GIGN") != std::string::npos);
+    assert(content.find("SWAT Stealth Black") != std::string::npos);
+    assert(content.find("Woodland Assault") != std::string::npos);
+    assert(content.find("GIGN Multicam") != std::string::npos);
 
     // T factions
-    assert(content.find("Phoenix Connexion") != std::string::npos);
     assert(content.find("Elite Crew (L337)") != std::string::npos);
-    assert(content.find("Arctic Avengers") != std::string::npos);
-    assert(content.find("Guerilla Warfare") != std::string::npos);
+    assert(content.find("Urban Rebel") != std::string::npos);
 
-    std::cout << "  -> PASS: All 8 CS 1.6 CT and T factions registered in menus.\n";
+    std::cout << "  -> PASS: All chosen CT and T factions registered in menus.\n";
 }
 
 void test_visual_color_separation() {
