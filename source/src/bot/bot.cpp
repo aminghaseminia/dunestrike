@@ -90,6 +90,16 @@ void CBot::Spawn()
 void CBot::Think()
 {
     if (intermission) return;
+    if (is_freezetime())
+    {
+        m_pMyEnt->move = m_pMyEnt->strafe = 0;
+        m_pMyEnt->vel.x = m_pMyEnt->vel.y = 0;
+        m_pMyEnt->attacking = false;
+        m_pMyEnt->jumpnext = false;
+        moveplayer(m_pMyEnt, 1, true);
+        SendBotInfo();
+        return;
+    }
     // Bot is dead?
     if (m_pMyEnt->state == CS_DEAD)
     {

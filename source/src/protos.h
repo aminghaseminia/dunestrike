@@ -399,6 +399,7 @@ extern void circle(GLuint tex, float x, float y, float r, float tx, float ty, fl
 extern void framedquadtexture(GLuint tex, int x, int y, int xs, int ys, int border = 0, int backlight = 255, bool blend = false);
 extern void setperspective(float fovy, float aspect, float nearplane, float farplane);
 extern void sethudgunperspective(bool on);
+extern int hudgun;
 extern void gl_drawframe(int w, int h, float changelod, float curfps, int elapsed);
 extern void clearminimap();
 extern void resetzones();

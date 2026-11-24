@@ -2251,7 +2251,7 @@ COMMAND(underhandthrow, "d");
 
 void shoot(playerent *p, vec &targ)
 {
-    if(p->state!=CS_ALIVE) return;
+    if(p->state!=CS_ALIVE || is_freezetime()) return;
     weapon *weap = p->weaponsel, *bweap = p->weapons[GUN_GRENADE];
     if(bweap->busy()) bweap->attack(targ); // continue ongoing nade action
     else bweap = NULL;

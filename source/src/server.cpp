@@ -786,7 +786,7 @@ void sendspawn(client *c)
     gs.lifesequence++;
     sendf(c->clientnum, 1, "ri7vv", SV_SPAWNSTATE, gs.lifesequence,
         gs.health, gs.armour,
-        gs.primary, gs.gunselect, m_arena ? c->spawnindex : -1,
+        gs.primary, gs.gunselect, (m_arena || m_bomb) ? c->spawnindex : -1,
         NUMGUNS, gs.ammo, NUMGUNS, gs.mag);
     gs.lastspawn = sg->gamemillis;
 }

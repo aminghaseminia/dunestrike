@@ -1519,6 +1519,7 @@ int main(int argc, char **argv)
 
 
     initing = NOT_INITING;
+    if(hudgun <= 0) hudgun = 1;
     uniformtexres = !hirestextures;
 
     initlog("models");
