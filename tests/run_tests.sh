@@ -29,9 +29,13 @@ clang++ -O2 -Wall "$DIR/test_gunplay_wallbang_molotov.cpp" -o "$DIR/test_gunplay
 clang++ -O2 -Wall "$DIR/test_round_flow_mvp_freezetime.cpp" -o "$DIR/test_round_flow_mvp_freezetime"
 clang++ -O2 -Wall "$DIR/test_tactical_map_competitive.cpp" -lz -o "$DIR/test_tactical_map_competitive"
 clang++ -O2 -Wall "$DIR/test_phase1_cs_fixes.cpp" -o "$DIR/test_phase1_cs_fixes"
+clang++ -O2 -Wall "$DIR/test_phase2_tactical_utilities.cpp" -o "$DIR/test_phase2_tactical_utilities"
 
 echo "[RUN] Running test_phase1_cs_fixes..."
 "$DIR/test_phase1_cs_fixes"
+
+echo "[RUN] Running test_phase2_tactical_utilities..."
+"$DIR/test_phase2_tactical_utilities"
 
 echo "[RUN] Running test_cs_tactical_gameplay..."
 "$DIR/test_cs_tactical_gameplay"

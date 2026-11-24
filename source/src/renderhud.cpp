@@ -1231,8 +1231,9 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             if(pct < 0) pct = 0;
             else if(pct > 100) pct = 100;
             const char *sitename = (bombinfo.site == 0 ? "SITE A" : (bombinfo.site == 1 ? "SITE B" : "SITE ?"));
-            defformatstring(actionline)("\f3%s AT %s (%d%%)",
-                bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING",
+            defformatstring(actionline)("%s AT %s (%d%%)",
+                bombinfo.state == BOMB_PLANTING ? "\f3PLANTING C4" :
+                (bombinfo.actionduration <= 6000 ? "\f0DEFUSING WITH KIT [5s]" : "\f3DEFUSING WITHOUT KIT [10s]"),
                 sitename,
                 pct);
             draw_text(actionline, (VIRTW*2 - text_width(actionline))/2, y + 3*FONTH, 255, 255, 255);
@@ -1264,7 +1265,13 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         }
         else if(bombinfo.state == BOMB_PLANTED && team_isactive(player1->team) && team_base(player1->team) != bombinfo.attackerteam)
         {
-            if(player1->o.dist(bombinfo.pos) <= 4.0f) hint = "\f1press F or right-click to defuse the bomb";
+            if(player1->o.dist(bombinfo.pos) <= 4.0f)
+            {
+                if(player1->has_defuse_kit)
+                    hint = "\f0press F or right-click to defuse [WITH KIT: 5s]";
+                else
+                    hint = "\f3press F or right-click to defuse [WITHOUT KIT: 10s]";
+            }
         }
         else if(bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)
             hint = "\f3the bomb is on the ground";
@@ -1424,6 +1431,10 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 int secs_left = max(0, (10000 - (lastmillis - p->lastspawn) + 999) / 1000);
                 defformatstring(buyinfo)("\f0[BUY ZONE: Press B (%ds)]", secs_left);
                 draw_text(buyinfo, 48, 760);
+            }
+            if(p->has_defuse_kit && team_base(p->team) == 1)
+            {
+                draw_text("\f0[KIT]", 48, 790);
             }
             pushfont("huddigits");
             draw_textf("%d", HUDPOS_HEALTH + HUDPOS_NUMBERSPACING, 823, p->health);

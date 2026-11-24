@@ -836,6 +836,46 @@ void update_firezones()
     }
 }
 
+struct smokezone
+{
+    vec pos;
+    int startmillis;
+    int endmillis;
+    float radius;
+};
+
+vector<smokezone> smokezones;
+
+void create_smokezone(const vec &pos)
+{
+    smokezone &sz = smokezones.add();
+    sz.pos = pos;
+    sz.startmillis = lastmillis;
+    sz.endmillis = lastmillis + 16000; // 16 seconds dense smoke duration
+    sz.radius = 14.0f; // 14 units smoke cloud radius
+}
+
+bool ray_hits_smoke(const vec &from, const vec &to)
+{
+    loopv(smokezones)
+    {
+        if(smokezones[i].endmillis <= lastmillis) continue;
+        vec seg = vec(to).sub(from);
+        float seglen = seg.magnitude();
+        if(seglen < 0.001f) continue;
+        vec dir = vec(seg).div(seglen);
+        vec v = vec(smokezones[i].pos).sub(from);
+        float proj = v.dot(dir);
+        if(proj > 0.0f && proj < seglen)
+        {
+            vec closest = vec(from).add(vec(dir).mul(proj));
+            if(closest.dist(smokezones[i].pos) <= smokezones[i].radius)
+                return true;
+        }
+    }
+    return false;
+}
+
 void removebounceents(playerent *owner)
 {
     loopv(bounceents) if(bounceents[i]->owner==owner) { delete bounceents[i]; bounceents.remove(i--); }
@@ -1514,28 +1554,68 @@ void grenadeent::splash()
         // Tactical Volumetric Smoke: dense cloud covering the area, lasting ~16 seconds
         particle_smokebomb(o, 220, 16000);
         adddynlight(NULL, o, 12, 1000, 500, 200, 200, 200);
+        create_smokezone(o);
         extinguish_firezones_near(o, 14.0f);
         return;
     }
     else if(nadetype == NADE_FLASH)
     {
-        // Flashbang: blinding flash and disorientation in line-of-sight
+        // Flashbang: angle-aware dot-product blinding flash and tinnitus ringing
         particle_splash(PART_SPARK, 30, 150, o);
         adddynlight(NULL, o, 24, 400, 200, 255, 255, 255);
 
-        vec eye = camera1->o;
-        float dist = eye.dist(o);
-        if(dist < 35.0f)
+        vector<playerent *> targets;
+        if(player1 && player1->state == CS_ALIVE) targets.add(player1);
+        loopv(players) if(players[i] && players[i]->state == CS_ALIVE) targets.add(players[i]);
+        loopv(bots) if(bots[i] && bots[i]->state == CS_ALIVE) targets.add(bots[i]);
+
+        loopv(targets)
         {
-            vec testto = o;
-            intersectgeometry(eye, testto);
-            if(testto.dist(o) < 1.5f) // direct line of sight
+            playerent *pl = targets[i];
+            vec eye = pl->o;
+            float dist = eye.dist(o);
+            if(dist < 38.0f)
             {
-                float factor = 1.0f - (dist / 35.0f);
-                int flashduration = (int)(4500 * factor + 1000);
-                player1->flashstartmillis = lastmillis;
-                player1->flashendmillis = lastmillis + flashduration;
-                player1->eardamagemillis = lastmillis + (int)(flashduration * 0.8f);
+                vec testto = o;
+                intersectgeometry(eye, testto);
+                if(testto.dist(o) < 1.5f) // direct line of sight without walls
+                {
+                    vec lookdir((float)(cosf(RAD*(pl->yaw-90)) * cosf(RAD*pl->pitch)),
+                                (float)(sinf(RAD*(pl->yaw-90)) * cosf(RAD*pl->pitch)),
+                                (float)(sinf(RAD*pl->pitch)));
+                    vec nadedir = vec(o).sub(eye);
+                    nadedir.normalize();
+                    float dot = lookdir.x * nadedir.x + lookdir.y * nadedir.y + lookdir.z * nadedir.z;
+
+                    // Dot product angle:
+                    // dot > 0.5: looking directly at grenade -> 1.0 (Full blinding)
+                    // 0.0 < dot <= 0.5: peripheral/flank view -> 0.2..1.0
+                    // dot <= 0.0: turned away / back to grenade -> 0.08 (Minimal glancing flash, no tinnitus)
+                    float angle_factor = (dot > 0.5f) ? 1.0f : ((dot > 0.0f) ? (0.20f + 0.80f * (dot / 0.5f)) : 0.08f);
+                    float dist_factor = 1.0f - (dist / 38.0f);
+                    if(dist_factor < 0.1f) dist_factor = 0.1f;
+
+                    int flashduration = (int)(4500 * dist_factor * angle_factor + 300);
+
+                    if(pl == player1)
+                    {
+                        player1->flashstartmillis = lastmillis;
+                        player1->flashendmillis = lastmillis + flashduration;
+                        if(angle_factor > 0.4f && dist < 25.0f)
+                        {
+                            player1->eardamagemillis = lastmillis + (int)(flashduration * 0.85f);
+                        }
+                    }
+                    else if(pl->type == ENT_BOT)
+                    {
+                        botent *b = (botent *)pl;
+                        if(b->pBot)
+                        {
+                            b->pBot->m_iAimDelay = max(b->pBot->m_iAimDelay, lastmillis + (int)(flashduration * 0.8f));
+                            b->pBot->m_iShootDelay = max(b->pBot->m_iShootDelay, lastmillis + (int)(flashduration * 0.7f));
+                        }
+                    }
+                }
             }
         }
         return;

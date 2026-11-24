@@ -117,6 +117,7 @@ struct clientstate : playerstate
     projectilestate<8> grenades;
     int akimbomillis;
     bool scoped;
+    bool has_defuse_kit;
     int flagscore, frags, teamkills, deaths, shotdamage, damage, events, lastdisc, reconnections;
     int suicides, friendlyfire, enemyfire, goodflags, antiflags; // match only vita replacement
 

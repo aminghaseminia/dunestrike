@@ -918,6 +918,7 @@ extern bool addbullethole(dynent *d, const vec &from, const vec &to, float radiu
 extern bool addscorchmark(vec &o, float radius = 7);
 extern void render_particles(int time, int typemask = ~0);
 extern const char *particletypenames[MAXPARTYPES + 1];
+extern bool ray_hits_smoke(const vec &from, const vec &to);
 
 // worldio
 enum { LWW_ENTATTROVERFLOW = 0x1, LWW_DECODEERR = 0x10, LWW_WORLDERROR = 0x100, LWW_MISSINGMEDIA = 0x1000, LWW_CONFIGERR = 0x10000, LWW_MODELERR = 0x100000, LWW_SCRIPTERR = 0x1000000 };

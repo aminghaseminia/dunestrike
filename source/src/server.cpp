@@ -783,6 +783,7 @@ void sendspawn(client *c)
     clientstate &gs = c->state;
     gs.respawn();
     gs.spawnstate(sg->smode);
+    gs.has_defuse_kit = (team_base(c->team) == TEAM_RVSF);
     gs.lifesequence++;
     sendf(c->clientnum, 1, "ri7vv", SV_SPAWNSTATE, gs.lifesequence,
         gs.health, gs.armour,
@@ -2130,10 +2131,12 @@ void bombaction(client *cl)
         b.state = BOMB_DEFUSING;
         b.actionactor = cl->clientnum;
         b.actionstart = sg->gamemillis;
-        b.actionduration = bomb_defusetime * 1000;
+        bool with_kit = cl->state.has_defuse_kit;
+        b.actionduration = with_kit ? 5000 : 10000; // CS standard: 5s with kit, 10s without kit
         b.actionend = sg->gamemillis + b.actionduration;
         sendbombinfo();
-        sendservmsg("\f3The bomb is being defused");
+        if(with_kit) sendservmsg("\f3The bomb is being defused (WITH DEFUSE KIT - 5s)");
+        else sendservmsg("\f3The bomb is being defused (WITHOUT KIT - 10s)");
     }
 }
 
