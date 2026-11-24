@@ -616,6 +616,22 @@ extern bombinfo_s bombinfo;
 extern void bombinfochanged(int oldstate);
 extern void bombcarrierchanged(int oldcarrier);
 extern void bombaction();
+
+struct roundmvpdata
+{
+    string name;
+    string reason;
+    int clientnum;
+    int team;
+    int kills;
+    int displayuntil;
+};
+extern roundmvpdata current_mvp;
+extern bool is_freezetime();
+extern void check_freezetime();
+extern int freezetime_end;
+extern void reset_round_stats();
+extern void calculate_round_mvp(int winning_team);
 extern void flagpickup(int fln);
 extern void tryflagdrop(bool manual = false);
 extern void flagreturn(int fln);

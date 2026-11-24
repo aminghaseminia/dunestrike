@@ -662,6 +662,7 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 lastspawn = lastmillis;
                 findplayerstart(player1, false, arenaspawn);
                 arenaintermission = 0;
+                reset_round_stats();
                 if(m_arena && !localwrongmap)
                 {
                     if(curpeer) closemenu(NULL);
@@ -1039,6 +1040,7 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 else if(alive==player1) hudoutf("you are the survivor!");
                 else hudoutf("%s is the survivor!", colorname(alive));
                 arenaintermission = lastmillis;
+                if(alive) calculate_round_mvp(team_base(alive->team));
                 break;
             }
 

@@ -494,7 +494,7 @@ public:
     int clientnum, lastupdate, plag, ping;
     enet_uint32 address;
     int lifesequence;                   // sequence id for each respawn, used in damage test
-    int frags, flagscore, deaths, tks;
+    int frags, flagscore, deaths, tks, round_kills;
     int lastaction, lastmove, lastpain, lastvoicecom, lastdeath;
     int lastspawn;
     vec spawnpos;
@@ -527,7 +527,7 @@ public:
     bool ignored, muted;
     bool nocorpse;
 
-    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
+    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), round_kills(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
                   team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), flashendmillis(0), flashstartmillis(0), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
                   prevweaponsel(NULL), weaponsel(NULL), nextweaponsel(NULL), primweap(NULL), nextprimweap(NULL), lastattackweapon(NULL),
                   smoothmillis(-1),
@@ -647,7 +647,7 @@ public:
     }
     void startmap()
     {
-        frags = flagscore = deaths = lifesequence = tks = 0;
+        frags = flagscore = deaths = lifesequence = tks = round_kills = 0;
     }
 };
 

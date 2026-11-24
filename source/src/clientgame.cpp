@@ -754,6 +754,7 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
     gets2c();
     showrespawntimer();
     bombcheck();
+    check_freezetime();
 
     // Added by Rick: let bots think
     if(m_botmode) BotManager.Think();
@@ -887,6 +888,8 @@ bool can_buy(playerent *d)
 {
     if(!d || d->state != CS_ALIVE) return false;
     if(editmode) return true;
+    // During freeze time, buying is always permitted in the buyzone
+    if(is_freezetime()) return in_buy_zone(d);
     // 10-second buy time limit after spawn / round start
     if(lastmillis - d->lastspawn > 10000) return false;
     // Must be in designated team buy zone
@@ -1029,6 +1032,126 @@ void bombcarrierchanged(int oldcarrier)
         hudoutf("\f1The bomb has been dropped!");
 }
 
+VARP(freezetime, 0, 5, 15);
+int freezetime_end = 0;
+static bool was_freezetime = false;
+
+bool is_freezetime()
+{
+    return freezetime_end > lastmillis;
+}
+
+void check_freezetime()
+{
+    if(is_freezetime())
+    {
+        was_freezetime = true;
+    }
+    else if(was_freezetime)
+    {
+        was_freezetime = false;
+        conoutf("\f2========================================");
+        conoutf("\f2>>> ROUND START - GO, GO, GO! <<<");
+        conoutf("\f2========================================");
+        audiomgr.playsound(S_GOGETEMBOYS, SP_HIGHEST);
+        audiomgr.playsound(S_ONTHEMOVE1, SP_HIGH);
+    }
+}
+
+roundmvpdata current_mvp = { "", "", -1, -1, 0, 0 };
+int round_planter = -1;
+int round_defuser = -1;
+
+void reset_round_stats()
+{
+    round_planter = -1;
+    round_defuser = -1;
+    if(player1) player1->round_kills = 0;
+    loopv(players) if(players[i]) players[i]->round_kills = 0;
+    if(freezetime > 0)
+    {
+        freezetime_end = lastmillis + freezetime * 1000;
+        was_freezetime = true;
+    }
+}
+
+void calculate_round_mvp(int winning_team)
+{
+    playerent *mvp = NULL;
+    string reason = "";
+
+    if(m_bomb && bombinfo.reason == BOMB_REASON_DEFUSED && round_defuser >= 0)
+    {
+        mvp = getclient(round_defuser);
+        copystring(reason, "for defusing the bomb");
+    }
+    else if(m_bomb && bombinfo.reason == BOMB_REASON_EXPLODED && round_planter >= 0)
+    {
+        mvp = getclient(round_planter);
+        copystring(reason, "for planting the bomb");
+    }
+    else
+    {
+        int max_k = 0;
+        if(player1 && team_base(player1->team) == winning_team)
+        {
+            if(player1->round_kills > max_k)
+            {
+                max_k = player1->round_kills;
+                mvp = player1;
+            }
+        }
+        loopv(players)
+        {
+            playerent *pl = players[i];
+            if(!pl || team_base(pl->team) != winning_team) continue;
+            if(pl->round_kills > max_k)
+            {
+                max_k = pl->round_kills;
+                mvp = pl;
+            }
+        }
+        if(mvp && max_k >= 2)
+        {
+            formatstring(reason)("for eliminating %d enemies", max_k);
+        }
+        else if(mvp && max_k == 1)
+        {
+            copystring(reason, "for securing the decisive kill");
+        }
+        else
+        {
+            if(!mvp)
+            {
+                if(player1 && player1->state == CS_ALIVE && team_base(player1->team) == winning_team)
+                    mvp = player1;
+                else
+                {
+                    loopv(players) if(players[i] && players[i]->state == CS_ALIVE && team_base(players[i]->team) == winning_team)
+                    {
+                        mvp = players[i];
+                        break;
+                    }
+                }
+            }
+            if(mvp) copystring(reason, "for surviving and securing the objective");
+        }
+    }
+
+    if(mvp)
+    {
+        copystring(current_mvp.name, colorname(mvp));
+        copystring(current_mvp.reason, reason);
+        current_mvp.clientnum = mvp->clientnum;
+        current_mvp.team = mvp->team;
+        current_mvp.displayuntil = lastmillis + 7000;
+        conoutf("\f0========================================");
+        conoutf("\f0★ ROUND MVP: \f1%s \f0(%s)!", current_mvp.name, current_mvp.reason);
+        conoutf("\f0========================================");
+        audiomgr.playsound(S_AWESOME1, SP_HIGHEST);
+    }
+}
+
 void bombinfochanged(int oldstate)
 {
     if(!m_bomb) return;
@@ -1036,7 +1159,10 @@ void bombinfochanged(int oldstate)
     {
         case BOMB_LIVE:
             if(oldstate == BOMB_WAIT || oldstate == BOMB_END)
+            {
+                reset_round_stats();
                 hudoutf("\f3Round %d - \f1%s attack, %s defend", bombinfo.round, team_basestring(bombinfo.attackerteam), team_basestring(team_opposite(bombinfo.attackerteam)));
+            }
             break;
         case BOMB_PLANTING:
             if(bombinfo.actionactor == player1->clientnum)
@@ -1050,6 +1176,7 @@ void bombinfochanged(int oldstate)
         case BOMB_PLANTED:
             if(oldstate == BOMB_PLANTING || oldstate == BOMB_WAIT)
             {
+                round_planter = bombinfo.actionactor;
                 if(bombinfo.site >= 0 && bombinfo.site < 2)
                     hudoutf("\f1The bomb has been planted at Site %c!", bombinfo.site == 0 ? 'A' : 'B');
                 else
@@ -1061,6 +1188,7 @@ void bombinfochanged(int oldstate)
         case BOMB_DEFUSING:
             if(oldstate != BOMB_DEFUSING)
             {
+                round_defuser = bombinfo.actionactor;
                 hudoutf(bombinfo.actionactor == player1->clientnum ? "\f3Defusing the bomb..." : "\f1The bomb is being defused!");
                 audiomgr.playsound(S_FA_DEFUSING, SP_HIGHEST);
                 audiomgr.playsound(S_C4_DISARM, &bombinfo.pos, SP_HIGH);
@@ -1068,6 +1196,8 @@ void bombinfochanged(int oldstate)
             break;
         case BOMB_END:
             if(oldstate == BOMB_END) break;
+            int win_team = bombinfo.result == BOMB_RESULT_ATTACKERS ? bombinfo.attackerteam : team_opposite(bombinfo.attackerteam);
+            calculate_round_mvp(win_team);
             if(bombinfo.reason == BOMB_REASON_EXPLODED)
             {
                 particle_splash(PART_FIREBALL, 40, 1200, bombinfo.pos);
@@ -1311,7 +1441,11 @@ void dokill(playerent *pl, playerent *act, bool gib, int gun, int zone)
         if(pl != act) act->tks++;
         if(!m_mp(gamemode)) act->frags--;
     }
-    else if(!m_mp(gamemode)) act->frags += ( gib && gun != GUN_GRENADE && gun != GUN_SHOTGUN) ? 2 : 1;
+    else
+    {
+        act->round_kills++;
+        if(!m_mp(gamemode)) act->frags += ( gib && gun != GUN_GRENADE && gun != GUN_SHOTGUN) ? 2 : 1;
+    }
 
     if(pl!=act && zone == HITZONE_HEAD) audiomgr.playsound(S_HEADSHOT, SP_LOW);
     if(gib) addgib(pl);

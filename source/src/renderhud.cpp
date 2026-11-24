@@ -1203,6 +1203,26 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             formatstring(timerline)("\f3round time %02d:%02d", remaining/60000, (remaining/1000)%60);
             draw_text(timerline, (VIRTW*2 - text_width(timerline))/2, y + 2*FONTH, 255, 255, 255);
         }
+        else if(bombinfo.state == BOMB_END)
+        {
+            bool t_win = (bombinfo.result == BOMB_RESULT_ATTACKERS);
+            const char *win_title = t_win ? "\f3TERRORISTS WIN THE ROUND" : "\f1COUNTER-TERRORISTS WIN THE ROUND";
+            const char *win_reason = "";
+            switch(bombinfo.reason)
+            {
+                case BOMB_REASON_EXPLODED:   win_reason = "Target Destroyed (C4 Exploded)"; break;
+                case BOMB_REASON_DEFUSED:    win_reason = "Bomb Defused"; break;
+                case BOMB_REASON_TIME:       win_reason = "Target Protected (Time Expired)"; break;
+                case BOMB_REASON_ELIMINATED: win_reason = t_win ? "All Counter-Terrorists Eliminated" : "All Terrorists Eliminated"; break;
+                default: break;
+            }
+            draw_text(win_title, (VIRTW*2 - text_width(win_title))/2, y + 2*FONTH, 255, 255, 255);
+            if(win_reason[0])
+            {
+                defformatstring(rline)("\f2(%s)", win_reason);
+                draw_text(rline, (VIRTW*2 - text_width(rline))/2, y + 3*FONTH, 255, 255, 255);
+            }
+        }
 
         if(bombinfo.state == BOMB_PLANTING || bombinfo.state == BOMB_DEFUSING)
         {
@@ -1259,6 +1279,25 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 draw_text(bombline, (VIRTW*2 - text_width(bombline))/2, y + 5*FONTH, 255, 255, 255);
             }
         }
+    }
+
+    // CS-Style Round MVP banner
+    if(current_mvp.displayuntil > lastmillis)
+    {
+        defformatstring(mvptext)("\f0★ ROUND MVP: \f1%s \f0(%s) ★", current_mvp.name, current_mvp.reason);
+        int mw = text_width(mvptext);
+        draw_text(mvptext, (VIRTW*2 - mw)/2, 160, 255, 215, 0);
+    }
+
+    // CS-Style Freeze-time countdown banner
+    if(is_freezetime() && !intermission)
+    {
+        int sec = max(1, (freezetime_end - lastmillis + 999) / 1000);
+        defformatstring(fztext)("\f3[ FREEZE TIME: %d SECONDS ]", sec);
+        int fzw = text_width(fztext);
+        draw_text(fztext, (VIRTW*2 - fzw)/2, VIRTH*2 - 200, 255, 200, 40);
+        const char *fzsub = "\f2Buy weapons and prepare equipment";
+        draw_text(fzsub, (VIRTW*2 - text_width(fzsub))/2, VIRTH*2 - 160, 230, 230, 230);
     }
 
     if(hidevote < 2 && multiplayer(NULL))

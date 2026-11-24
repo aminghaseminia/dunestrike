@@ -440,7 +440,8 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
     else // fake physics for player ents to create _the_ cube movement (tm)
     {
         const int timeinair = pl->timeinair;
-        int move = intermission || (pl->onladder && !pl->onfloor && pl->move == -1) ? 0 : pl->move; // movement on ladder
+        bool frozen = is_freezetime() && pl->state == CS_ALIVE && !editfly && !specfly;
+        int move = intermission || frozen || (pl->onladder && !pl->onfloor && pl->move == -1) ? 0 : pl->move; // movement on ladder
         if(!editfly) water = waterlevel > pl->o.z - 0.5f;
 
         float chspeed = (pl->onfloor || pl->onladder || !pl->crouchedinair) ? 0.4f : 1.0f;
@@ -472,6 +473,13 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
 
         d.x += (float)(pl->strafe*cosf(RAD*(pl->yaw-180)));
         d.y += (float)(pl->strafe*sinf(RAD*(pl->yaw-180)));
+
+        if(frozen)
+        {
+            d = vec(0, 0, 0);
+            pl->vel.x = pl->vel.y = 0;
+            pl->jumpnext = false;
+        }
 
         float curfullspeed = d.magnitudexy();
 
@@ -867,7 +875,7 @@ void attack(bool on)
 void jumpn(bool on)
 {
     static bool wason = false;
-    player1->jumpnext = on && !wason && !player1->crouching && !intermission && !player1->isspectating() && !ispaused;
+    player1->jumpnext = on && !wason && !player1->crouching && !intermission && !player1->isspectating() && !ispaused && !is_freezetime();
     wason = on;
     if(player1->isspectating())
     {
