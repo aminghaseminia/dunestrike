@@ -951,7 +951,13 @@ void mousemove(int idx, int idy)
     if(zooming)
     {                                                                                                                   //      when scoped:
         if(scopesens > 0.0001f) cursens = scopesens;                                                                    //          if specified, use dedicated (fixed) scope sensitivity
-        else cursens *= autoscopesens ? autoscopesensscale : scopesensscale;                                            //          or adjust sensitivity by given (fixed) factor or based on scopefov/fov
+        else
+        {
+            float scale = autoscopesens ? autoscopesensscale : scopesensscale;
+            if(player1->weaponsel->type == GUN_SNIPER && ((sniperrifle *)player1->weaponsel)->scoped == 2)
+                scale *= 0.375f; // scale proportionally for double zoom (15 / 40)
+            cursens *= scale;
+        }
     }
     cursens /= 33.0f * sensitivityscale;                                                                                // final scaling
 

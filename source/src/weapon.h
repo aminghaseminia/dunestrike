@@ -101,7 +101,7 @@ struct subgun : gun
 
 struct sniperrifle : gun
 {
-    bool scoped;
+    int scoped; // 0 = unscoped, 1 = zoom 1, 2 = zoom 2 (double zoom)
     int scoped_since;
 
     sniperrifle(playerent *owner);

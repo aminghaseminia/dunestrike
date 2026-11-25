@@ -2000,7 +2000,7 @@ int subgun::dynspread()
 
 // sniperrifle
 
-sniperrifle::sniperrifle(playerent *owner) : gun(owner, GUN_SNIPER), scoped(false) {}
+sniperrifle::sniperrifle(playerent *owner) : gun(owner, GUN_SNIPER), scoped(0) {}
 
 void sniperrifle::attackfx(const vec &from, const vec &to, int millis)
 {
@@ -2023,7 +2023,7 @@ bool sniperrifle::attack(vec &targ)
         // CS sniper rifle bolt-action cycle: drops scope immediately upon firing
         if(scoped)
         {
-            scoped = false;
+            scoped = 0;
             owner->scoping = false;
         }
     }
@@ -2033,7 +2033,7 @@ bool sniperrifle::attack(vec &targ)
 bool sniperrifle::reload(bool autoreloaded)
 {
     bool r = weapon::reload(autoreloaded);
-    if(owner==player1 && r) { scoped = false; player1->scoping = false; }
+    if(owner==player1 && r) { scoped = 0; player1->scoping = false; }
     return r;
 }
 
@@ -2061,9 +2061,9 @@ int sniperrifle::dynspread()
 }
 float sniperrifle::dynrecoil() { return scoped && lastmillis - scoped_since > SCOPESETTLETIME ? info.recoil / 3 : info.recoil; }
 bool sniperrifle::selectable() { return weapon::selectable() && !m_noprimary && this == owner->primweap; }
-void sniperrifle::onselecting(bool sound) { weapon::onselecting(sound); scoped = false; player1->scoping = false; }
-void sniperrifle::ondeselecting() { scoped = false; owner->scoping = false; }
-void sniperrifle::onownerdies() { shots = 0; scoped = false; owner->scoping = false; }
+void sniperrifle::onselecting(bool sound) { weapon::onselecting(sound); scoped = 0; player1->scoping = false; }
+void sniperrifle::ondeselecting() { scoped = 0; owner->scoping = false; }
+void sniperrifle::onownerdies() { shots = 0; scoped = 0; owner->scoping = false; }
 void sniperrifle::renderhudmodel() { if(!scoped) weapon::renderhudmodel(); }
 
 void sniperrifle::renderaimhelp(bool teamwarning)
@@ -2072,6 +2072,7 @@ void sniperrifle::renderaimhelp(bool teamwarning)
     if(!editmode)
     {
         if(scoped || teamwarning) drawcrosshair(owner, teamwarning ? CROSSHAIR_TEAMMATE : CROSSHAIR_SCOPE, NULL, 24.0f);
+        else drawcrosshair(owner, owner->weaponsel->type); // Crosshair on sniper when unscoped
     }
     else drawcrosshair(owner, CROSSHAIR_EDIT);
 }
@@ -2080,15 +2081,22 @@ void sniperrifle::setscope(bool enable)
 {
     if(this == owner->weaponsel && !reloading && owner->state == CS_ALIVE)
     {
-        if(scoped == false && enable == true) scoped_since = lastmillis;
-        if(enable != scoped) owner->scoping = enable;
-        scoped = enable;
+        if(scoped == 0 && enable) scoped_since = lastmillis;
+        if((enable != 0) != (scoped != 0)) owner->scoping = enable;
+        scoped = enable ? 1 : 0;
     }
 }
 
 void sniperrifle::togglescope()
 {
-    setscope(!scoped);
+    if(this == owner->weaponsel && !reloading && owner->state == CS_ALIVE)
+    {
+        int next_scope = (scoped + 1) % 3; // 0 (unscoped) -> 1 (zoom 1) -> 2 (double zoom) -> 0
+        if(scoped == 0 && next_scope > 0) scoped_since = lastmillis;
+        scoped = next_scope;
+        owner->scoping = (scoped > 0);
+        audiomgr.playsound(S_GUNCHANGE, owner, owner == player1 ? SP_HIGH : SP_NORMAL);
+    }
 }
 
 // carbine

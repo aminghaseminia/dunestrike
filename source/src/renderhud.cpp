@@ -246,7 +246,7 @@ void drawcrosshair(playerent *p, int n, color *c, float size)
             else if(p->health<=50) glColor3ub(255,128,0);
         }
     }
-    float s = size>0 ? size : (float)crosshairsize;
+    float s = size>0 ? size : (float)(crosshairsize > 0 ? crosshairsize : 15);
     float dynamicscale = 1.0f;
     if((crosshairfx == 1 || crosshairfx == 3) && p && p->weaponsel)
     {
@@ -660,15 +660,17 @@ void drawradar_vicinity(playerent *p, int w, int h)
         if(p->team < TEAM_SPECT && ((m_teammode && !isteam(p_baseteam, pl_baseteam)) || (!m_teammode && !(spect3rd && d == pl)))) continue;
         if(p->team == TEAM_SPECT && !(spect3rd && (isteam(p_baseteam, pl_baseteam) || d == pl))) continue;
         vec rtmp = vec(pl->o).sub(d->o);
-        bool isok = rtmp.sqrxy() < d2s;
-        if(isok)
+        float dist = sqrtf(rtmp.x*rtmp.x + rtmp.y*rtmp.y);
+        float maxdist = radarheight / 2.0f;
+        if(dist > maxdist && maxdist > 0)
         {
-            rtmp.mul(scaled);
-            drawradarent(rtmp.x, rtmp.y, pl->yaw, pl->state==CS_ALIVE ? (isattacking(pl) ? 2 : 0) : 1, spect3rd && d == pl ? 2 : pl_baseteam, iconsize, isattacking(pl), "%s", colorname(pl));
-            if(m_bomb && bombinfo.carrier == pl->clientnum)
-            {
-                drawradarent(rtmp.x + iconsize*0.4f, rtmp.y - iconsize*0.4f, 0, 2, 3, iconsize*0.75f, true);
-            }
+            rtmp.mul(maxdist * 0.92f / dist); // Clamp teammate to radar border so they remain visible across entire map
+        }
+        rtmp.mul(scaled);
+        drawradarent(rtmp.x, rtmp.y, pl->yaw, pl->state==CS_ALIVE ? (isattacking(pl) ? 2 : 0) : 1, spect3rd && d == pl ? 2 : pl_baseteam, iconsize, isattacking(pl), "%s", colorname(pl));
+        if(m_bomb && bombinfo.carrier == pl->clientnum)
+        {
+            drawradarent(rtmp.x + iconsize*0.4f, rtmp.y - iconsize*0.4f, 0, 2, 3, iconsize*0.75f, true);
         }
     }
     if(m_flags_)
@@ -1031,7 +1033,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     if(p->state==CS_ALIVE || p->state==CS_EDITING)
     {
         bool drawteamwarning = crosshairteamsign && targetplayer && isteam(targetplayer->team, p->team) && targetplayer->state==CS_ALIVE;
-        if(!reloading) p->weaponsel->renderaimhelp(drawteamwarning);
+        p->weaponsel->renderaimhelp(drawteamwarning);
         if(!editmode && !showmap) drawktfindicator(p);
     }
 
@@ -1042,7 +1044,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
 
     if(!editmode)
     {
-        if((!hideradar || showmap) && player1->spectatemode <= SM_FLY) drawradar(p, w, h); // EDITMINIMAP: radar/showmap in editmode will be out-of-date
+        if(player1->spectatemode <= SM_FLY) drawradar(p, w, h); // Always draw radar during gameplay (spectatemode <= SM_FLY)
         glMatrixMode(GL_MODELVIEW);
         if(!hideteam && m_teammode) drawteamicons(w, h, is_spect);
         glMatrixMode(GL_PROJECTION);

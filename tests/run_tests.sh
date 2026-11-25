@@ -32,6 +32,7 @@ clang++ -O2 -Wall "$DIR/test_phase1_cs_fixes.cpp" -o "$DIR/test_phase1_cs_fixes"
 clang++ -O2 -Wall "$DIR/test_phase2_tactical_utilities.cpp" -o "$DIR/test_phase2_tactical_utilities"
 clang++ -O2 -Wall "$DIR/test_phase3_spatial_audio.cpp" -o "$DIR/test_phase3_spatial_audio"
 clang++ -O2 -Wall "$DIR/test_phase4_kevlar_helmet.cpp" -o "$DIR/test_phase4_kevlar_helmet"
+clang++ -O2 -Wall "$DIR/test_radar_crosshair_sniperzoom.cpp" -o "$DIR/test_radar_crosshair_sniperzoom"
 
 echo "[RUN] Running test_phase1_cs_fixes..."
 "$DIR/test_phase1_cs_fixes"
@@ -47,6 +48,9 @@ echo "[RUN] Running test_phase4_kevlar_helmet..."
 
 echo "[RUN] Running test_cs_tactical_gameplay..."
 "$DIR/test_cs_tactical_gameplay"
+
+echo "[RUN] Running test_radar_crosshair_sniperzoom..."
+"$DIR/test_radar_crosshair_sniperzoom"
 
 # 2. Run unit tests
 echo "[RUN] Running test_bombsite..."
@@ -111,6 +115,9 @@ echo "[RUN] Running test_phase1_cs_fixes..."
 
 echo "[RUN] Running test_cs_tactical_gameplay..."
 "$DIR/test_cs_tactical_gameplay"
+
+echo "[RUN] Running test_radar_crosshair_sniperzoom..."
+"$DIR/test_radar_crosshair_sniperzoom"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

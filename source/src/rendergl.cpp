@@ -487,7 +487,16 @@ float dynfov()
     bool isscoped = player1->weaponsel->type == GUN_SNIPER && ((sniperrifle *)player1->weaponsel)->scoped;
     bool useremote = spectfovremote && camera1 != player1 && camera1->type == ENT_PLAYER && ((playerent *)camera1)->ffov && ((playerent *)camera1)->scopefov;
     if(camera1 != player1 && camera1->type < ENT_CAMERA) isscoped = ((playerent *)camera1)->scoping;
-    if(isscoped) return (float) (useremote ? ((playerent *)camera1)->scopefov : scopefov);
+    if(isscoped)
+    {
+        if(useremote) return (float)((playerent *)camera1)->scopefov;
+        if(player1->weaponsel->type == GUN_SNIPER)
+        {
+            sniperrifle *sr = (sniperrifle *)player1->weaponsel;
+            if(sr->scoped == 2) return 15.0f; // Double Zoom FOV (CS AWP 2nd zoom level)
+        }
+        return (float)scopefov;
+    }
     else if(player1->isspectating()) return (float)(useremote ? ((playerent *)camera1)->ffov : spectfov);
     else return (float)fov;
 }
