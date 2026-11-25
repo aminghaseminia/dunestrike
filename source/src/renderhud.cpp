@@ -1250,12 +1250,12 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 if(bombinfo.sites[i].x >= 0)
                 {
                     float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
-                    if(dx*dx + dy*dy <= 9.0f) { atsite = i; break; }
+                    if(dx*dx + dy*dy <= 16.0f) { atsite = i; break; }
                 }
             }
             if(atsite >= 0)
             {
-                formatstring(hintbuf)("\f1press F or right-click to plant at Site %c", atsite == 0 ? 'A' : 'B');
+                formatstring(hintbuf)("\f0>>> [ BOMBSITE %c ] HOLD [E] TO PLANT BOMB <<<", atsite == 0 ? 'A' : 'B');
                 hint = hintbuf;
             }
             else
@@ -1268,9 +1268,9 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             if(player1->o.dist(bombinfo.pos) <= 4.0f)
             {
                 if(player1->has_defuse_kit)
-                    hint = "\f0press F or right-click to defuse [WITH KIT: 5s]";
+                    hint = "\f0>>> HOLD [E] TO DEFUSE BOMB [WITH KIT: 5s] <<<";
                 else
-                    hint = "\f3press F or right-click to defuse [WITHOUT KIT: 10s]";
+                    hint = "\f3>>> HOLD [E] TO DEFUSE BOMB [WITHOUT KIT: 10s] <<<";
             }
         }
         else if(bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)
