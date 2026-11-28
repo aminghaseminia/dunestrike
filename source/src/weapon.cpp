@@ -1426,6 +1426,12 @@ void weapon::attackphysics(vec &from, vec &to) // physical fx to the owner
     {
         owner->vel.add(vec(unitv).mul(recoil/dist).mul(owner->crouching ? 0.75 : 1.0f));
         owner->pitchvel = min(powf(shots/(float)(g.recoilincrease), 2.0f)+(float)(g.recoilbase)/10.0f, (float)(g.maxrecoil)/10.0f);
+        if(shots > 0 && (type == GUN_ASSAULT || type == GUN_SUBGUN || type == GUN_PISTOL))
+        {
+            float kick_up = (type == GUN_ASSAULT ? 0.65f : (type == GUN_SUBGUN ? 0.45f : 0.55f));
+            if(owner->crouching) kick_up *= 0.65f;
+            owner->pitch = min(owner->pitch + kick_up, 89.0f);
+        }
         if(shots > 1 && (type == GUN_ASSAULT || type == GUN_SUBGUN))
         {
             float shake = ((shots % 2 == 0 ? 1 : -1) * (rnd(10) / 10.0f + 0.4f)) * (owner->crouching ? 0.5f : 1.0f);
@@ -1437,6 +1443,7 @@ void weapon::attackphysics(vec &from, vec &to) // physical fx to the owner
 VARP(righthanded, 0, 1, 1); // flowtron 20090727
 
 int inspectmillis = 0;
+int deploymillis = 0;
 void inspectweapon()
 {
     if(!player1 || player1->state != CS_ALIVE) return;
@@ -1457,8 +1464,10 @@ void weapon::renderhudmodel(int lastaction, int index)
     defformatstring(path)("weapons/%s", info.modelname);
     bool emit = (wm.anim&ANIM_INDEX)==ANIM_GUN_SHOOT && (lastmillis - lastaction) < flashtime();
 
-    float roll_inspect = 0.0f, yaw_inspect = 0.0f, pitch_inspect = 0.0f;
+    float roll_anim = 0.0f, yaw_anim = 0.0f, pitch_anim = 0.0f;
     vec rend_pos = wm.pos;
+
+    // 1. Inspect Animation (Key F)
     if(p == player1 && inspectmillis > 0)
     {
         int elapsed = lastmillis - inspectmillis;
@@ -1466,9 +1475,9 @@ void weapon::renderhudmodel(int lastaction, int index)
         {
             float t = elapsed / 2400.0f;
             float sway = sinf(t * (float)M_PI);
-            roll_inspect = sway * (righthanded ? 24.0f : -24.0f);
-            yaw_inspect = sway * 15.0f;
-            pitch_inspect = -sway * 10.0f;
+            roll_anim += sway * (righthanded ? 24.0f : -24.0f);
+            yaw_anim += sway * 15.0f;
+            pitch_anim += -sway * 10.0f;
             rend_pos.z -= sway * 0.12f;
         }
         else
@@ -1477,7 +1486,49 @@ void weapon::renderhudmodel(int lastaction, int index)
         }
     }
 
-    rendermodel(path, wm.anim|ANIM_DYNALLOC|(righthanded==index ? ANIM_MIRROR : 0)|(emit ? ANIM_PARTICLE : 0), 0, -1, rend_pos, roll_inspect, p->yaw+90+yaw_inspect, p->pitch+wm.k_rot+pitch_inspect, 40.0f, wm.basetime, NULL, NULL, 1.28f);
+    // 2. Reload Motion Animation (Key R)
+    if(p == player1 && reloading > 0 && info.reloadtime > 0)
+    {
+        int rel_elapsed = lastmillis - reloading;
+        if(rel_elapsed < info.reloadtime)
+        {
+            float t = float(rel_elapsed) / float(info.reloadtime); // 0.0 to 1.0
+            float curve = sinf(t * (float)M_PI);
+            // Tilt inwards to reveal magazine well
+            roll_anim += curve * (righthanded ? -20.0f : 20.0f);
+            pitch_anim += -curve * 14.0f;
+            yaw_anim += curve * (righthanded ? 10.0f : -10.0f);
+            rend_pos.z -= curve * 0.24f;
+
+            // Magazine insertion tactile jolt at t ~ 0.50
+            if(t > 0.44f && t < 0.60f)
+            {
+                float slap = sinf((t - 0.44f) / 0.16f * (float)M_PI);
+                rend_pos.z += slap * 0.05f;
+                pitch_anim += slap * 5.0f;
+            }
+        }
+    }
+
+    // 3. Quick-Draw / Deploy Animation on Weapon Switch
+    if(p == player1 && deploymillis > 0)
+    {
+        int dep_elapsed = lastmillis - deploymillis;
+        if(dep_elapsed < 260)
+        {
+            float t = float(dep_elapsed) / 260.0f;
+            float factor = (1.0f - t) * (1.0f - t); // quadratic ease-out
+            rend_pos.z -= factor * 0.30f;
+            pitch_anim += factor * 22.0f;
+            roll_anim += factor * (righthanded ? -12.0f : 12.0f);
+        }
+        else
+        {
+            deploymillis = 0;
+        }
+    }
+
+    rendermodel(path, wm.anim|ANIM_DYNALLOC|(righthanded==index ? ANIM_MIRROR : 0)|(emit ? ANIM_PARTICLE : 0), 0, -1, rend_pos, roll_anim, p->yaw+90+yaw_anim, p->pitch+wm.k_rot+pitch_anim, 40.0f, wm.basetime, NULL, NULL, 1.28f);
 }
 
 void weapon::updatetimers(int millis)
@@ -1487,7 +1538,7 @@ void weapon::updatetimers(int millis)
 
 void weapon::onselecting(bool sound)
 {
-    if(owner == player1) inspectmillis = 0;
+    if(owner == player1) { inspectmillis = 0; deploymillis = lastmillis; }
     updatelastaction(owner);
     bool local = (owner == player1);
     if(sound) audiomgr.playsound(S_GUNCHANGE, owner, local ? SP_HIGH : SP_NORMAL);
