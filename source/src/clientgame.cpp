@@ -1069,6 +1069,7 @@ bool is_freezetime()
 {
     return freezetime_end > lastmillis;
 }
+COMMANDF(is_freezetime, "", () { intret(is_freezetime() ? 1 : 0); });
 
 void check_freezetime()
 {

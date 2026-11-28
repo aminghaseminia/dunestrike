@@ -1738,15 +1738,20 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     // CS-Style Round MVP banner
     draw_mvp_banner(VIRTW, (bombinfo.state == BOMB_END) ? 570 : 220);
 
-    // CS-Style Freeze-time countdown banner
+    // CS-Style Freeze-time countdown banner & Quick Loadout Selector UX
     if(is_freezetime() && !intermission)
     {
         int sec = max(1, (freezetime_end - lastmillis + 999) / 1000);
         defformatstring(fztext)("\f3[ FREEZE TIME: %d SECONDS ]", sec);
         int fzw = text_width(fztext);
-        draw_text(fztext, (VIRTW*2 - fzw)/2, VIRTH*2 - 200, 255, 200, 40);
-        const char *fzsub = "\f2Buy weapons and prepare equipment";
-        draw_text(fzsub, (VIRTW*2 - text_width(fzsub))/2, VIRTH*2 - 160, 230, 230, 230);
+        draw_text(fztext, (VIRTW*2 - fzw)/2, VIRTH*2 - 240, 255, 200, 40);
+
+        const char *curgun = (player1->primary >= 0 && player1->primary < NUMGUNS) ? gunnames[player1->primary] : "Assault Rifle";
+        defformatstring(curloadout)("\f2Equipped: \f1%s", curgun);
+        draw_text(curloadout, (VIRTW*2 - text_width(curloadout))/2, VIRTH*2 - 200, 200, 255, 200);
+
+        const char *fzsub = "\f7Quick Select: \f1[1] \f7Rifle  \f1[2] \f7Sniper  \f1[3] \f7SMG  \f1[4] \f7Shotgun  \f1[5] \f7Carbine  |  \f1[B] \f7Menu";
+        draw_text(fzsub, (VIRTW*2 - text_width(fzsub))/2, VIRTH*2 - 160, 240, 240, 240);
     }
 
     if(hidevote < 2 && multiplayer(NULL))

@@ -531,7 +531,7 @@ void setpickupspawn(int i, bool on)
 
 SVARFP(nextprimary, guns[GUN_ASSAULT].modelname,
 {
-    if(m_valid(gamemode) && !editmode && !can_buy(player1))
+    if(m_valid(gamemode) && !editmode && !can_buy(player1) && !is_freezetime())
     {
         if(lastmillis - player1->lastspawn > 10000)
             conoutf("\f310 seconds have passed. You cannot select weapons now.");
@@ -553,9 +553,63 @@ SVARFP(nextprimary, guns[GUN_ASSAULT].modelname,
             player1->setnextprimary(n);
             addmsg(SV_PRIMARYWEAP, "ri", player1->nextprimweap->type);
             nextprimary = exchangestr(nextprimary, gunnames[player1->nextprimweap->type]);
+
+            // Immediate live equipping during freeze-time or buy zone
+            if(player1->state == CS_ALIVE && (is_freezetime() || can_buy(player1)))
+            {
+                player1->setprimary(n);
+                player1->mag[n] = magsize(n);
+                player1->ammo[n] = ammostats[n].start - magsize(n);
+                player1->weaponswitch(player1->weapons[n]);
+                audiomgr.playsound(S_GUNCHANGE, SP_HIGH);
+                conoutf("\f2Equipped: %s", gunnames[n]);
+            }
             break;
     }
 });
+
+void quickloadout(int *idx)
+{
+    if(!idx) return;
+    int choice = *idx;
+    int gun = GUN_ASSAULT;
+    switch(choice)
+    {
+        case 1: gun = GUN_ASSAULT; break; // AK-47 / M4A1
+        case 2: gun = GUN_SNIPER; break;  // AWP / Sniper
+        case 3: gun = GUN_SUBGUN; break;  // MP5 / Submachine
+        case 4: gun = GUN_SHOTGUN; break; // Shotgun
+        case 5: gun = GUN_CARBINE; break; // Tactical Carbine
+        default:
+            if(valid_weapon(choice) && choice >= GUN_CARBINE && choice <= GUN_ASSAULT) gun = choice;
+            else return;
+            break;
+    }
+
+    if(m_valid(gamemode) && !editmode && !can_buy(player1) && !is_freezetime())
+    {
+        conoutf("\f3Can only change loadout during freeze-time or in buy zone!");
+        return;
+    }
+
+    player1->setnextprimary(gun);
+    addmsg(SV_PRIMARYWEAP, "ri", player1->nextprimweap->type);
+    nextprimary = exchangestr(nextprimary, gunnames[player1->nextprimweap->type]);
+
+    if(player1->state == CS_ALIVE)
+    {
+        player1->setprimary(gun);
+        player1->mag[gun] = magsize(gun);
+        player1->ammo[gun] = ammostats[gun].start - magsize(gun);
+        player1->weaponswitch(player1->weapons[gun]);
+        audiomgr.playsound(S_GUNCHANGE, SP_HIGH);
+        conoutf("\f2Equipped loadout: %s", gunnames[gun]);
+    }
+}
+COMMAND(quickloadout, "i");
+
+void loadoutcmd(int *idx) { quickloadout(idx); }
+COMMANDN(loadout, loadoutcmd, "i");
 
 // flag ent actions done by the local player
 

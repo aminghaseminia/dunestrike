@@ -40,6 +40,7 @@ clang++ -O2 -Wall "$DIR/test_phase1_stairs_smartmode.cpp" -o "$DIR/test_phase1_s
 clang++ -O2 -Wall "$DIR/test_phase2_animations_recoil.cpp" -o "$DIR/test_phase2_animations_recoil"
 clang++ -O2 -Wall "$DIR/test_phase3_bot_tactics.cpp" -o "$DIR/test_phase3_bot_tactics"
 clang++ -O2 -Wall "$DIR/test_phase4_c4_audio_tension.cpp" -o "$DIR/test_phase4_c4_audio_tension"
+clang++ -O2 -Wall "$DIR/test_phase5_quick_loadout.cpp" -o "$DIR/test_phase5_quick_loadout"
 
 echo "[RUN] Running test_phase1_cs_fixes..."
 "$DIR/test_phase1_cs_fixes"
@@ -146,6 +147,9 @@ echo "[RUN] Running test_phase3_bot_tactics..."
 
 echo "[RUN] Running test_phase4_c4_audio_tension..."
 "$DIR/test_phase4_c4_audio_tension"
+
+echo "[RUN] Running test_phase5_quick_loadout..."
+"$DIR/test_phase5_quick_loadout"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"
