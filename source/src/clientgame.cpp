@@ -175,6 +175,12 @@ SVARFF(curname, { curname = exchangestr(curname, player1->name); }, {} );
 
 int teamatoi(const char *name)
 {
+    if(!name || !*name) return -1;
+    if(!strcasecmp(name, "ct") || !strcasecmp(name, "counter-terrorists") || !strcasecmp(name, "counter-terrorist") || !strcasecmp(name, "rvsf") || !strcmp(name, "1")) return TEAM_RVSF;
+    if(!strcasecmp(name, "t") || !strcasecmp(name, "terrorists") || !strcasecmp(name, "terrorist") || !strcasecmp(name, "cla") || !strcmp(name, "0")) return TEAM_CLA;
+    if(!strcasecmp(name, "ct-spect") || !strcasecmp(name, "rvsf-spect") || !strcasecmp(name, "ctspc") || !strcmp(name, "3")) return TEAM_RVSF_SPECT;
+    if(!strcasecmp(name, "t-spect") || !strcasecmp(name, "terrorists-spect") || !strcasecmp(name, "cla-spect") || !strcasecmp(name, "tspc") || !strcmp(name, "2")) return TEAM_CLA_SPECT;
+    if(!strcasecmp(name, "spectator") || !strcasecmp(name, "spect") || !strcmp(name, "4")) return TEAM_SPECT;
     return getlistindex(name, teamnames, true, -1);
 }
 
@@ -2019,7 +2025,7 @@ void scallvote(int *type, const char *arg1, const char *arg2)
             case SA_FORCETEAM:
             {
                 int team = atoi(arg2);
-                if(team < 0) arg2 = (team == 0) ? "RVSF" : "CLA";
+                if(team < 0) arg2 = (team == 0) ? "CT" : "Terrorists";
                 // fall through
             }
             default:

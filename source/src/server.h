@@ -582,8 +582,8 @@ guninfo guns[NUMGUNS] =
 
 const char *gunnames[NUMGUNS + 1];
 
-const char *teamnames[] = {"CLA", "RVSF", "CLA-SPECT", "RVSF-SPECT", "SPECTATOR", "", "void"};
-const char *teamnames_s[] = {"CLA", "RVSF", "CSPC", "RSPC", "SPEC", "", "void"};
+const char *teamnames[] = {"Terrorists", "CT", "Terrorists-SPECT", "CT-SPECT", "SPECTATOR", "", "void"};
+const char *teamnames_s[] = {"Terrorists", "CT", "TSPC", "CTSPC", "SPEC", "", "void"};
 
 const char *rolenames[CR_NUM + 1] = { "unarmed", "master", "admin", "owner", "" };
 

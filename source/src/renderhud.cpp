@@ -1862,8 +1862,8 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         int virtposy = (VIRTH*2)/10;
         const char *specttext = "GHOST";
         if(player1->team == TEAM_SPECT) specttext = "GHOST";
-        else if(player1->team == TEAM_CLA_SPECT) specttext = "[CLA]";
-        else if(player1->team == TEAM_RVSF_SPECT) specttext = "[RVSF]";
+        else if(player1->team == TEAM_CLA_SPECT) specttext = "[Terrorists]";
+        else if(player1->team == TEAM_RVSF_SPECT) specttext = "[CT]";
         draw_text(specttext, virtposx, virtposy*7);
 
         extern bool smoverviewflyforbidden();

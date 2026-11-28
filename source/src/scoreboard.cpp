@@ -266,17 +266,17 @@ void renderteamscore(teamscore *t)
     loopv(t->teammembers) if(t->teammembers[i]->state == CS_ALIVE) alive_count++;
     int n = t->teammembers.length();
     bool is_t = (team_base(t->team) == TEAM_CLA);
-    const char *tname = is_t ? "TERRORISTS" : "COUNTER-TERRORISTS";
+    const char *tname = is_t ? "TERRORISTS" : "CT";
 
     if(m_bomb)
     {
         int wins = is_t ? bombinfo.wins[0] : bombinfo.wins[1];
-        line.addcol(sc_clientnum, "%s", is_t ? "T" : "CT");
+        line.addcol(sc_clientnum, "%s", is_t ? "Terrorists" : "CT");
         line.addcol(sc_name, "%s (%d alive) - %d WINS", tname, alive_count, wins);
     }
     else
     {
-        line.addcol(sc_clientnum, "%s", is_t ? "T" : "CT");
+        line.addcol(sc_clientnum, "%s", is_t ? "Terrorists" : "CT");
         line.addcol(sc_name, "%s (%d alive / %d total)", tname, alive_count, n);
     }
 
