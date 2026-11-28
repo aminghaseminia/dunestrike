@@ -182,14 +182,45 @@ bool CBot::FindEnemy(void)
         }
     //}
 
+    // Trade-frag assistance: check if a nearby teammate (within 25m) is fighting an enemy
+    if (!pNewEnemy)
+    {
+        loopv(bots)
+        {
+            botent *mate = bots[i];
+            if(mate && mate != m_pMyEnt && mate->state == CS_ALIVE && isteam(mate->team, m_pMyEnt->team))
+            {
+                if(mate->enemy && mate->enemy->state == CS_ALIVE && m_pMyEnt->o.dist(mate->o) < 25.0f)
+                {
+                    if(IsVisible(mate->enemy))
+                    {
+                        pNewEnemy = mate->enemy;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     if (pNewEnemy)
     {
-        if (!m_pMyEnt->enemy) // Add shoot delay if new enemy is found
+        if (!m_pMyEnt->enemy || m_pMyEnt->enemy != pNewEnemy) // Add human reaction delay if new enemy is found
         {
+            m_iFirstSeenEnemyMillis = lastmillis;
+            int base_lat = 220;
+            switch(m_sSkillNr)
+            {
+                case 0: base_lat = 190; break;
+                case 1: base_lat = 230; break;
+                case 2: base_lat = 270; break;
+                default: base_lat = 330; break;
+            }
+            m_iReactionLatency = base_lat + rnd(40);
+
             float flMinShootDelay = m_pBotSkill->flMinAttackDelay;
             float flMaxShootDelay = m_pBotSkill->flMaxAttackDelay;
 
-            m_iShootDelay = lastmillis + int(RandomFloat(flMinShootDelay,
+            m_iShootDelay = lastmillis + m_iReactionLatency + int(RandomFloat(flMinShootDelay,
                                        flMaxShootDelay) * 1000.0f);
         }
 
@@ -627,14 +658,27 @@ void CBot::CheckWeaponSwitch()
 
 void CBot::ShootEnemy()
 {
-    if(!m_pMyEnt->enemy) return;
-    if(!IsVisible(m_pMyEnt->enemy)) return;
+    if(!m_pMyEnt->enemy) { m_iFirstSeenEnemyMillis = 0; return; }
+    if(!IsVisible(m_pMyEnt->enemy)) { m_iFirstSeenEnemyMillis = 0; return; }
 
     m_iSawEnemyTime = lastmillis;
+
+    // Phase 3: Human reaction latency guard (prevent instant frame-0 aimbot snap)
+    if(m_iFirstSeenEnemyMillis > 0 && (lastmillis - m_iFirstSeenEnemyMillis < m_iReactionLatency))
+    {
+        return;
+    }
 
     // Aim to enemy
     vec enemypos = GetEnemyPos(m_pMyEnt->enemy);
     AimToVec(enemypos);
+
+    // Phase 3: Tactical grenade in combat if enemy at medium range
+    float flDist = GetDistance(enemypos);
+    if(flDist >= 12.0f && flDist <= 28.0f && m_pMyEnt->mag[GUN_GRENADE] > 0 && (lastmillis % 7 == 0))
+    {
+        ThrowTacticalGrenade(enemypos);
+    }
 
     // Time to shoot?
     if (m_iShootDelay < lastmillis)
@@ -651,8 +695,6 @@ void CBot::ShootEnemy()
                 if ((yawtoturn > 5) || (pitchtoturn > 15)) // UNDONE: Should be skill based
                     return;
             }
-
-            float flDist = GetDistance(enemypos);
 
             // Check if bot is in fire range
             if ((flDist < WeaponInfoTable[m_pMyEnt->gunselect].flMinFireDistance) ||
@@ -696,17 +738,48 @@ bool CBot::ChoosePreferredWeapon()
     return true;
 }
 
+void CBot::ThrowTacticalGrenade(const vec &target)
+{
+    if(m_pMyEnt->mag[GUN_GRENADE] <= 0) return;
+    if(lastmillis - m_iLastTacticalGrenadeMillis < 8000) return; // 8s cooldown
+
+    vec from = m_pMyEnt->o;
+    vec diff = target;
+    diff.sub(from);
+    float dist = diff.magnitude();
+    if(dist < 8.0f || dist > 45.0f) return;
+
+    // Pitch & velocity vector towards target
+    vec vel = diff;
+    vel.normalize();
+    vel.mul(1.4f);
+    vel.z += 0.28f + min(0.30f, dist / 70.0f); // Arc upwards
+
+    grenades *gnade = (grenades *)m_pMyEnt->weapons[GUN_GRENADE];
+    if(gnade)
+    {
+        gnade->activatenade(vel);
+        gnade->thrownade(vel);
+        m_iLastTacticalGrenadeMillis = lastmillis;
+    }
+}
+
 int CBot::GetShootDelay()
 {
-    // UNDONE
-    return m_pMyEnt->gunwait[m_pMyEnt->gunselect];
-    if ((WeaponInfoTable[m_pMyEnt->gunselect].eWeaponType == TYPE_MELEE) ||
-        (WeaponInfoTable[m_pMyEnt->gunselect].eWeaponType == TYPE_AUTO))
-        return m_pMyEnt->gunwait[m_pMyEnt->gunselect];
+    int gun = m_pMyEnt->gunselect;
+    int wait = m_pMyEnt->gunwait[gun];
+    if (WeaponInfoTable[gun].eWeaponType == TYPE_AUTO)
+    {
+        // Burst firing cadence: 3-4 round bursts with micro recoil reset
+        static int burstcount = 0;
+        if(++burstcount % (3 + (m_sSkillNr == 0 ? 2 : 1)) == 0)
+            return wait + 110 + rnd(60);
+        return wait;
+    }
 
     float flMinShootDelay = m_pBotSkill->flMinAttackDelay;
     float flMaxShootDelay = m_pBotSkill->flMaxAttackDelay;
-    return max(m_pMyEnt->gunwait[m_pMyEnt->gunselect], int(RandomFloat(flMinShootDelay, flMaxShootDelay) * 1000.0f));
+    return max(wait, int(RandomFloat(flMinShootDelay, flMaxShootDelay) * 1000.0f));
 }
 
 void CBot::CheckReload() // reload gun if no enemies are around
@@ -771,6 +844,40 @@ bool CBot::CheckBombTactics()
             vec site_target = bombinfo.sites[target_site];
             float dist2site = Get2DDistance(site_target);
 
+            // Phase 3: Tactical Regrouping & Push Formation
+            if(!is_carrier && dist2site > 14.0f && dist2site < 32.0f)
+            {
+                int nearby_mates = 0;
+                loopv(bots)
+                {
+                    botent *mate = bots[i];
+                    if(mate && mate != m_pMyEnt && mate->state == CS_ALIVE && isteam(mate->team, m_pMyEnt->team))
+                    {
+                        if(m_pMyEnt->o.dist(mate->o) < 18.0f) nearby_mates++;
+                    }
+                }
+                if(player1->state == CS_ALIVE && isteam(player1->team, m_pMyEnt->team))
+                {
+                    if(m_pMyEnt->o.dist(player1->o) < 18.0f) nearby_mates++;
+                }
+
+                if(nearby_mates == 0 && (m_iRegroupWaitMillis == 0 || lastmillis < m_iRegroupWaitMillis))
+                {
+                    if(m_iRegroupWaitMillis == 0) m_iRegroupWaitMillis = lastmillis + 1200;
+                    m_pMyEnt->move = 0;
+                    m_pMyEnt->trycrouch = true;
+                    AimToVec(site_target);
+                    return true;
+                }
+            }
+            if(lastmillis >= m_iRegroupWaitMillis) m_iRegroupWaitMillis = 0;
+
+            // Phase 3: Tactical smoke / flash throw before site breach
+            if(dist2site >= 14.0f && dist2site <= 28.0f && m_pMyEnt->mag[GUN_GRENADE] > 0)
+            {
+                ThrowTacticalGrenade(site_target);
+            }
+
             if(is_carrier)
             {
                 // Carrier bot: head to site and plant!
@@ -822,6 +929,12 @@ bool CBot::CheckBombTactics()
             int my_site = (m_pMyEnt->clientnum % 2 == 0) ? 0 : 1;
             vec def_target = bombinfo.sites[my_site];
             float dist2def = Get2DDistance(def_target);
+
+            // Phase 3: CT site choke grenade throw if threat engaging near site
+            if(dist2def <= 14.0f && m_pMyEnt->mag[GUN_GRENADE] > 0 && m_pMyEnt->enemy)
+            {
+                ThrowTacticalGrenade(m_pMyEnt->enemy->o);
+            }
             if(dist2def <= 7.0f)
             {
                 m_pMyEnt->move = (dist2def > 4.5f) ? 1 : 0;

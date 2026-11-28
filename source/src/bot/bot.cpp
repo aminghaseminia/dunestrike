@@ -63,6 +63,10 @@ void CBot::Spawn()
      m_bCombatJump = false;
      m_iCombatJumpDelay = 0;
      m_iHuntDelay = 0;
+     m_iFirstSeenEnemyMillis = 0;
+     m_iReactionLatency = 0;
+     m_iLastTacticalGrenadeMillis = 0;
+     m_iRegroupWaitMillis = 0;
      m_vHuntLocation = m_vPrevHuntLocation = g_vecZero;
      m_pHuntTarget = NULL;
      m_fPrevHuntDist = 0.0f;

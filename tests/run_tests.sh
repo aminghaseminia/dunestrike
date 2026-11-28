@@ -38,6 +38,7 @@ clang++ -O2 -Wall "$DIR/test_cs_gameplay_features.cpp" -o "$DIR/test_cs_gameplay
 clang++ -O2 -Wall "$DIR/test_cs_tactical_polish.cpp" -o "$DIR/test_cs_tactical_polish"
 clang++ -O2 -Wall "$DIR/test_phase1_stairs_smartmode.cpp" -o "$DIR/test_phase1_stairs_smartmode"
 clang++ -O2 -Wall "$DIR/test_phase2_animations_recoil.cpp" -o "$DIR/test_phase2_animations_recoil"
+clang++ -O2 -Wall "$DIR/test_phase3_bot_tactics.cpp" -o "$DIR/test_phase3_bot_tactics"
 
 echo "[RUN] Running test_phase1_cs_fixes..."
 "$DIR/test_phase1_cs_fixes"
@@ -138,6 +139,9 @@ echo "[RUN] Running test_phase1_stairs_smartmode..."
 
 echo "[RUN] Running test_phase2_animations_recoil..."
 "$DIR/test_phase2_animations_recoil"
+
+echo "[RUN] Running test_phase3_bot_tactics..."
+"$DIR/test_phase3_bot_tactics"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

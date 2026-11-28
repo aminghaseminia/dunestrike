@@ -431,7 +431,8 @@ public:
             health = 100;
             armour = 100;
             has_helmet = true; // CS standard competitive round spawn loadout: Kevlar + Helmet
-            ammo[GUN_GRENADE] = 2;
+            mag[GUN_GRENADE] = 1;
+            ammo[GUN_GRENADE] = 1;
         }
     }
 

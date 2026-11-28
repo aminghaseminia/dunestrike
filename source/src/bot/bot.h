@@ -158,6 +158,10 @@ public:
      bool m_bCombatJump;
      float m_iCombatJumpDelay;
      bool m_bShootAtFeet;
+     int m_iFirstSeenEnemyMillis;
+     int m_iReactionLatency;
+     int m_iLastTacticalGrenadeMillis;
+     int m_iRegroupWaitMillis;
 
      // Hunting variabeles
      int m_iHuntDelay;
@@ -267,6 +271,7 @@ public:
      bool InUnreachableList(entity *e);
      virtual bool DoSPStuff(void) = 0;
      bool CheckBombTactics(void);
+     void ThrowTacticalGrenade(const vec &target);
      vec GetEnemyPos(playerent *d);
      bool AStar(void);
      float AStarCost(waypoint_s *pWP1, waypoint_s *pWP2);
