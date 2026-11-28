@@ -222,9 +222,106 @@ void loadcrosshair(const char *type, const char *filename)
 
 COMMAND(loadcrosshair, "ss");
 
+VARP(cscrosshair, 0, 1, 1);
+VARP(cscrosshair_gap, -10, 4, 30);
+VARP(cscrosshair_size, 1, 9, 50);
+VARP(cscrosshair_thickness, 1, 2, 10);
+VARP(cscrosshair_dot, 0, 0, 1);
+VARP(cscrosshair_dynamic, 0, 1, 1);
+
+static inline void draw_hud_rect(float x1, float y1, float x2, float y2)
+{
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(x1, y1);
+    glVertex2f(x2, y1);
+    glVertex2f(x1, y2);
+    glVertex2f(x2, y2);
+    glEnd();
+}
+
 void drawcrosshair(playerent *p, int n, color *c, float size)
 {
     if (cleanedit && editmode) return;
+
+    if(cscrosshair && n != CROSSHAIR_TEAMMATE && !(p && p->scoping))
+    {
+        glDisable(GL_TEXTURE_2D);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        float gap = (float)cscrosshair_gap;
+        float length = (float)cscrosshair_size;
+        float thickness = (float)cscrosshair_thickness;
+
+        if(cscrosshair_dynamic && p)
+        {
+            float speed = hypotf(p->vel.x, p->vel.y);
+            if(speed > 0.05f)
+            {
+                float movespread = min(speed * 32.0f, 18.0f);
+                if(p->crouching) movespread *= 0.35f;
+                if(!p->onfloor) movespread += 12.0f;
+                gap += movespread;
+            }
+            if(p->weaponsel)
+            {
+                int curspread = p->weaponsel->dynspread();
+                int defspread = max(1, (int)p->weaponsel->info.spread);
+                float spread_diff = float(curspread - defspread);
+                if(spread_diff > 0.0f)
+                {
+                    gap += min(spread_diff * 0.5f, 22.0f);
+                }
+            }
+            if(p->crouching && speed <= 0.05f)
+            {
+                gap = max(1.0f, gap - 2.0f);
+            }
+        }
+
+        float cx = VIRTW / 2.0f;
+        float cy = VIRTH / 2.0f;
+        float ht = thickness / 2.0f;
+
+        float cr = 0.0f, cg = 1.0f, cb = 0.0f;
+        if(c) { cr = c->r; cg = c->g; cb = c->b; }
+        else if(crosshairfx == 1 || crosshairfx == 2)
+        {
+            if(!m_osok)
+            {
+                if(p->health <= 25) { cr = 1.0f; cg = 0.0f; cb = 0.0f; }
+                else if(p->health <= 50) { cr = 1.0f; cg = 0.5f; cb = 0.0f; }
+            }
+        }
+
+        // Draw 1px black outline for contrast
+        glColor4f(0.0f, 0.0f, 0.0f, 0.85f);
+        float ot = ht + 1.0f;
+        draw_hud_rect(cx - gap - length - 1.0f, cy - ot, cx - gap + 1.0f, cy + ot);
+        draw_hud_rect(cx + gap - 1.0f, cy - ot, cx + gap + length + 1.0f, cy + ot);
+        draw_hud_rect(cx - ot, cy - gap - length - 1.0f, cx + ot, cy - gap + 1.0f);
+        draw_hud_rect(cx - ot, cy + gap - 1.0f, cx + ot, cy + gap + length + 1.0f);
+
+        if(cscrosshair_dot)
+        {
+            draw_hud_rect(cx - ht - 1.0f, cy - ht - 1.0f, cx + ht + 1.0f, cy + ht + 1.0f);
+        }
+
+        // Inner colored bars
+        glColor4f(cr, cg, cb, 0.95f);
+        draw_hud_rect(cx - gap - length, cy - ht, cx - gap, cy + ht);
+        draw_hud_rect(cx + gap, cy - ht, cx + gap + length, cy + ht);
+        draw_hud_rect(cx - ht, cy - gap - length, cx + ht, cy - gap);
+        draw_hud_rect(cx - ht, cy + gap, cx + ht, cy + gap + length);
+
+        if(cscrosshair_dot)
+        {
+            draw_hud_rect(cx - ht, cy - ht, cx + ht, cy + ht);
+        }
+
+        glEnable(GL_TEXTURE_2D);
+        return;
+    }
+
     Texture *crosshair = crosshairs[n];
     if(!crosshair)
     {
@@ -274,9 +371,30 @@ VARP(damageindicatoralpha, 1, 50, 100);
 int damagedirections[8] = {0};
 void *damageindicatorplayer = NULL;
 
+struct dmg_indicator_hit {
+    float angle;      // angle in degrees (0 = ahead, 90 = right, 180 = behind, 270 = left)
+    int starttime;    // lastmillis when hit
+    int expiretime;   // lastmillis when expired
+};
+#define MAX_DMG_INDICATORS 12
+static dmg_indicator_hit dmg_indicator_hits[MAX_DMG_INDICATORS];
+static int next_dmg_indicator = 0;
+
 void updatedmgindicator(playerent *p, vec &attack)
 {
     if(hidedamageindicator || !damageindicatorsize) return;
+    vec dir = attack;
+    dir.sub(p->o);
+    float attacker_ang = dir.anglexy();
+    float rel_ang = 180.0f - p->yaw - attacker_ang;
+    while(rel_ang < 0.0f) rel_ang += 360.0f;
+    while(rel_ang >= 360.0f) rel_ang -= 360.0f;
+
+    dmg_indicator_hits[next_dmg_indicator].angle = rel_ang;
+    dmg_indicator_hits[next_dmg_indicator].starttime = lastmillis;
+    dmg_indicator_hits[next_dmg_indicator].expiretime = lastmillis + max(500, damageindicatortime);
+    next_dmg_indicator = (next_dmg_indicator + 1) % MAX_DMG_INDICATORS;
+
     vec base_d = p->o;
     base_d.sub(attack);
     damagedirections[(int(742.5f - p->yaw - base_d.anglexy()) / 45) & 0x7] = lastmillis + damageindicatortime;
@@ -285,26 +403,62 @@ void updatedmgindicator(playerent *p, vec &attack)
 
 void drawdmgindicator(playerent *p)
 {
-    if(!damageindicatorsize) return;
+    if(!damageindicatorsize || hidedamageindicator) return;
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_TEXTURE_2D);
-    float size = (float)damageindicatorsize;
-    loopi(8)
-    {
-        if(!damagedirections[i] || damagedirections[i] < lastmillis) continue;
-        float t = damageindicatorsize/(float)(damagedirections[i]-lastmillis);
-        glPushMatrix();
-        glColor4f(0.5f, 0.0f, 0.0f, damageindicatoralpha/100.0f);
-        glTranslatef(VIRTW/2, VIRTH/2, 0);
-        glRotatef(i*45, 0, 0, 1);
-        glTranslatef(0, (float)-damageindicatordist, 0);
-        glScalef(max(0.0f, 1.0f-t), max(0.0f, 1.0f-t), 0);
 
-        glBegin(GL_TRIANGLES);
-        glVertex3f(size/2.0f, size/2.0f, 0.0f);
-        glVertex3f(-size/2.0f, size/2.0f, 0.0f);
-        glVertex3f(0.0f, 0.0f, 0.0f);
+    float base_radius = min(VIRTW, VIRTH) * 0.12f;
+    float arc_thickness = 14.0f;
+    float max_alpha = (damageindicatoralpha > 0 ? damageindicatoralpha : 75) / 100.0f;
+
+    loopi(MAX_DMG_INDICATORS)
+    {
+        dmg_indicator_hit &hit = dmg_indicator_hits[i];
+        if(!hit.expiretime || hit.expiretime <= lastmillis) continue;
+
+        float total_dur = float(hit.expiretime - hit.starttime);
+        if(total_dur <= 0.0f) continue;
+        float progress = float(lastmillis - hit.starttime) / total_dur;
+        if(progress < 0.0f || progress > 1.0f) continue;
+
+        float alpha = (1.0f - progress * progress) * max_alpha;
+        float radius = base_radius + progress * 24.0f;
+        float r_inner = radius - arc_thickness * 0.5f;
+        float r_outer = radius + arc_thickness * 0.5f;
+
+        glPushMatrix();
+        glTranslatef(VIRTW / 2.0f, VIRTH / 2.0f, 0);
+        glRotatef(hit.angle, 0, 0, 1);
+
+        const int SEGMENTS = 14;
+        const float HALF_SPAN = 28.0f;
+        glBegin(GL_TRIANGLE_STRIP);
+        for(int s = 0; s <= SEGMENTS; s++)
+        {
+            float deg = -HALF_SPAN + (float(s) / SEGMENTS) * (HALF_SPAN * 2.0f);
+            float rad = deg * RAD;
+            float tip_factor = cosf((deg / HALF_SPAN) * (PI / 2.0f));
+            float a = alpha * tip_factor;
+
+            glColor4f(0.95f, 0.08f, 0.08f, a);
+            glVertex2f(sinf(rad) * r_outer, -cosf(rad) * r_outer);
+
+            glColor4f(0.80f, 0.02f, 0.02f, a * 0.4f);
+            glVertex2f(sinf(rad) * r_inner, -cosf(rad) * r_inner);
+        }
         glEnd();
+
+        float chev_h = 10.0f;
+        float chev_w = 12.0f;
+        float chev_y = -r_outer - 2.0f;
+        glBegin(GL_TRIANGLES);
+        glColor4f(1.0f, 0.2f, 0.2f, alpha);
+        glVertex2f(0.0f, chev_y - chev_h);
+        glColor4f(0.8f, 0.05f, 0.05f, alpha * 0.6f);
+        glVertex2f(-chev_w * 0.5f, chev_y);
+        glVertex2f(chev_w * 0.5f, chev_y);
+        glEnd();
+
         glPopMatrix();
     }
     glEnable(GL_TEXTURE_2D);
@@ -525,10 +679,27 @@ void drawradar_showmap(playerent *p, int w, int h)
         glEnable(GL_TEXTURE_2D);
     }
     glTranslatef(centerpos.x - halfviewsize, centerpos.y - halfviewsize , 0);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
-    quad(minimaptex, 0, 0, minimapviewsize, 0.0f, 0.0f, 1.0f);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_BLEND);
+    static Texture *cached_showmap_radar = NULL;
+    static string cached_showmap_name = "";
+    if(strcmp(cached_showmap_name, getclientmap()))
+    {
+        copystring(cached_showmap_name, getclientmap());
+        defformatstring(rp)("packages/maps/radar/%s.png", behindpath(getclientmap()));
+        cached_showmap_radar = fileexists(findfile(rp, "rb"), "r") ? textureload(rp, 3) : NULL;
+    }
+    if(cached_showmap_radar)
+    {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        quad(cached_showmap_radar->id, 0, 0, minimapviewsize, 0.0f, 0.0f, 1.0f);
+    }
+    else
+    {
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+        quad(minimaptex, 0, 0, minimapviewsize, 0.0f, 0.0f, 1.0f);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_BLEND);
+    }
 
     float gdim = max(clmapdims.xspan, clmapdims.yspan); //no border
     float offd = fabs((clmapdims.yspan - clmapdims.xspan) / 2.0f);
@@ -645,9 +816,37 @@ void drawradar_vicinity(playerent *p, int w, int h)
     glTranslatef(-halfviewsize, -halfviewsize, 0);
     vec d4rc = vec(d->o).sub(rsd).normalize().mul(0);
     vec usecenter = vec(d->o).sub(rtr).sub(d4rc);
-    glDisable(GL_BLEND);
+
+    static Texture *cached_vicinity_radar = NULL;
+    static string cached_vicinity_name = "";
+    if(strcmp(cached_vicinity_name, getclientmap()))
+    {
+        copystring(cached_vicinity_name, getclientmap());
+        defformatstring(rp)("packages/maps/radar/%s.png", behindpath(getclientmap()));
+        cached_vicinity_radar = fileexists(findfile(rp, "rb"), "r") ? textureload(rp, 3) : NULL;
+    }
+
+    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    circle(minimaptex, halfviewsize, halfviewsize, halfviewsize, usecenter.x/(float)gdim, usecenter.y/(float)gdim, scaleh, 31); //Draw mimimaptext as radar background
+    glColor4f(0.06f, 0.09f, 0.13f, 0.85f);
+    static Texture *solid_disc_tex = NULL;
+    if(!solid_disc_tex) solid_disc_tex = textureload("packages/misc/compass-base.png", 3);
+    if(solid_disc_tex)
+    {
+        circle(solid_disc_tex->id, halfviewsize, halfviewsize, halfviewsize, 0.5f, 0.5f, 0.5f, 31);
+    }
+
+    if(cached_vicinity_radar)
+    {
+        glColor4f(1.0f, 1.0f, 1.0f, 0.95f);
+        circle(cached_vicinity_radar->id, halfviewsize, halfviewsize, halfviewsize, usecenter.x/(float)gdim, usecenter.y/(float)gdim, scaleh, 31);
+    }
+    else
+    {
+        glDisable(GL_BLEND);
+        circle(minimaptex, halfviewsize, halfviewsize, halfviewsize, usecenter.x/(float)gdim, usecenter.y/(float)gdim, scaleh, 31);
+        glEnable(GL_BLEND);
+    }
     glTranslatef(halfviewsize, halfviewsize, 0);
 
     if(!(p->isspectating() && spect3rd)) drawradarent(0, 0, p->yaw, (p->state==CS_ALIVE || p->state==CS_EDITING) ? (isattacking(p) ? 2 : 0) : 1, 2, iconsize, isattacking(p), "%s", colorname(p)); // local player
