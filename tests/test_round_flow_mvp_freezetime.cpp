@@ -10,13 +10,14 @@
 #include <string>
 #include <vector>
 
+#include "test_paths.h"
+
 void test_freeze_time_mechanics()
 {
     std::cout << "[Test 1] Verifying Freeze-Time Movement Lock and Buy Window...\n";
 
     // 1. Check physics.cpp for freeze-time movement lock
-    std::ifstream phys_file("source/src/physics.cpp");
-    if(!phys_file.is_open()) phys_file.open("../source/src/physics.cpp");
+    std::ifstream phys_file(ds_path("source/src/physics.cpp"));
     assert(phys_file.is_open());
 
     std::string line;
@@ -37,8 +38,7 @@ void test_freeze_time_mechanics()
     assert(found_frozen_jump);
 
     // 2. Check clientgame.cpp for freezetime var and can_buy
-    std::ifstream cg_file("source/src/clientgame.cpp");
-    if(!cg_file.is_open()) cg_file.open("../source/src/clientgame.cpp");
+    std::ifstream cg_file(ds_path("source/src/clientgame.cpp"));
     assert(cg_file.is_open());
 
     bool found_freezetime_var = false;
@@ -64,8 +64,7 @@ void test_round_mvp_system()
 {
     std::cout << "[Test 2] Verifying Round MVP Calculation Logic...\n";
 
-    std::ifstream cg_file("source/src/clientgame.cpp");
-    if(!cg_file.is_open()) cg_file.open("../source/src/clientgame.cpp");
+    std::ifstream cg_file(ds_path("source/src/clientgame.cpp"));
     assert(cg_file.is_open());
 
     std::string line;
@@ -98,8 +97,7 @@ void test_hud_announcements_and_win_reason()
 {
     std::cout << "[Test 3] Verifying HUD Freeze Countdown, MVP Stars & Win Reasons...\n";
 
-    std::ifstream hud_file("source/src/renderhud.cpp");
-    if(!hud_file.is_open()) hud_file.open("../source/src/renderhud.cpp");
+    std::ifstream hud_file(ds_path("source/src/renderhud.cpp"));
     assert(hud_file.is_open());
 
     std::string line;

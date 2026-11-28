@@ -10,6 +10,8 @@
 #include <string>
 #include <cmath>
 
+#include "test_paths.h"
+
 // Simulated penetration values matching weapon.cpp
 float getpenpower(int gun)
 {
@@ -41,8 +43,7 @@ void test_wallbang_source_and_math()
 {
     std::cout << "[Test 1] Verifying Wallbang Raycast Penetration Logic...\n";
 
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -89,8 +90,7 @@ void test_molotov_incendiary_system()
     std::cout << "[Test 2] Verifying Molotov / Incendiary Firezone & Smoke Extinguishment...\n";
 
     // 1. Verify entity.h enum
-    std::ifstream ent_file("source/src/entity.h");
-    if(!ent_file.is_open()) ent_file.open("../source/src/entity.h");
+    std::ifstream ent_file(ds_path("source/src/entity.h"));
     assert(ent_file.is_open());
     std::string ent_line;
     bool found_nade_molotov = false;
@@ -102,8 +102,7 @@ void test_molotov_incendiary_system()
     assert(found_nade_molotov);
 
     // 2. Verify weapon.cpp implementation
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
     std::string line;
     bool found_firezone_struct = false;
@@ -138,8 +137,7 @@ void test_underhand_grenade_throw()
 {
     std::cout << "[Test 3] Verifying Secondary Underhand Grenade Throw & Lob Physics...\n";
 
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
     std::string line;
     bool found_underhand_flag = false;

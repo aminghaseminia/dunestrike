@@ -11,13 +11,14 @@
 #include <cmath>
 #include <cassert>
 
+#include "test_paths.h"
+
 void test_kevlar_helmet_damage_model()
 {
     std::cout << "[Test 1] Verifying Kevlar & Helmet Headshot Mitigation Math...\n";
 
     // 1. Check entity.h implementation
-    std::ifstream ent_file("source/src/entity.h");
-    if(!ent_file.is_open()) ent_file.open("../source/src/entity.h");
+    std::ifstream ent_file(ds_path("source/src/entity.h"));
     assert(ent_file.is_open());
 
     std::string line;
@@ -64,8 +65,7 @@ void test_aim_punch_elimination()
     std::cout << "[Test 2] Verifying Aim Punch Elimination when Armored...\n";
 
     // Verify entity.h aimpunch logic
-    std::ifstream ent_file("source/src/entity.h");
-    if(!ent_file.is_open()) ent_file.open("../source/src/entity.h");
+    std::ifstream ent_file(ds_path("source/src/entity.h"));
     assert(ent_file.is_open());
 
     std::string line;
@@ -90,8 +90,7 @@ void test_hud_badges_and_dink_audio()
     std::cout << "[Test 3] Verifying HUD Helmet/Kevlar Badges & Dink Audio...\n";
 
     // 1. Check renderhud.cpp for badges
-    std::ifstream hud_file("source/src/renderhud.cpp");
-    if(!hud_file.is_open()) hud_file.open("../source/src/renderhud.cpp");
+    std::ifstream hud_file(ds_path("source/src/renderhud.cpp"));
     assert(hud_file.is_open());
 
     std::string line;
@@ -109,8 +108,7 @@ void test_hud_badges_and_dink_audio()
     assert(found_kevlar_badge && "HUD must display [KEVLAR] badge when player has body armor only");
 
     // 2. Check clientgame.cpp for helmet dink sound
-    std::ifstream cg_file("source/src/clientgame.cpp");
-    if(!cg_file.is_open()) cg_file.open("../source/src/clientgame.cpp");
+    std::ifstream cg_file(ds_path("source/src/clientgame.cpp"));
     assert(cg_file.is_open());
 
     bool found_dink_audio = false;

@@ -10,13 +10,14 @@
 #include <cmath>
 #include <cassert>
 
+#include "test_paths.h"
+
 void test_dot_product_flashbang()
 {
     std::cout << "[Test 1] Verifying Angle-Aware Dot-Product Flashbang & Tinnitus...\n";
 
     // 1. Check weapon.cpp for dot product implementation
-    std::ifstream weapon_file("source/src/weapon.cpp");
-    if(!weapon_file.is_open()) weapon_file.open("../source/src/weapon.cpp");
+    std::ifstream weapon_file(ds_path("source/src/weapon.cpp"));
     assert(weapon_file.is_open());
 
     std::string line;
@@ -65,8 +66,7 @@ void test_defuse_kit_system()
     std::cout << "[Test 2] Verifying Defuse Kit System (10s base / 5s with kit)...\n";
 
     // 1. Verify entity.h has has_defuse_kit
-    std::ifstream ent_file("source/src/entity.h");
-    if(!ent_file.is_open()) ent_file.open("../source/src/entity.h");
+    std::ifstream ent_file(ds_path("source/src/entity.h"));
     assert(ent_file.is_open());
     std::string line;
     bool found_ent_kit = false;
@@ -78,8 +78,7 @@ void test_defuse_kit_system()
     assert(found_ent_kit);
 
     // 2. Verify server.h has has_defuse_kit in clientstate
-    std::ifstream server_h("source/src/server.h");
-    if(!server_h.is_open()) server_h.open("../source/src/server.h");
+    std::ifstream server_h(ds_path("source/src/server.h"));
     assert(server_h.is_open());
     bool found_serv_kit = false;
     while(std::getline(server_h, line))
@@ -90,8 +89,7 @@ void test_defuse_kit_system()
     assert(found_serv_kit);
 
     // 3. Verify server.cpp defusal durations: 5000ms with kit vs 10000ms without kit
-    std::ifstream server_cpp("source/src/server.cpp");
-    if(!server_cpp.is_open()) server_cpp.open("../source/src/server.cpp");
+    std::ifstream server_cpp(ds_path("source/src/server.cpp"));
     assert(server_cpp.is_open());
     bool found_5000_10000 = false;
     while(std::getline(server_cpp, line))
@@ -102,8 +100,7 @@ void test_defuse_kit_system()
     assert(found_5000_10000 && "server.cpp must enforce 5s defuse with kit and 10s without kit");
 
     // 4. Verify renderhud.cpp display strings
-    std::ifstream hud_file("source/src/renderhud.cpp");
-    if(!hud_file.is_open()) hud_file.open("../source/src/renderhud.cpp");
+    std::ifstream hud_file(ds_path("source/src/renderhud.cpp"));
     assert(hud_file.is_open());
     bool found_hud_kit_str = false;
     bool found_hud_without_kit_str = false;
@@ -123,8 +120,7 @@ void test_dense_smoke_core()
     std::cout << "[Test 3] Verifying Dense Smoke Core & Bot Sightline Blocking...\n";
 
     // 1. Verify renderparticles.cpp dual-layer smoke
-    std::ifstream part_file("source/src/renderparticles.cpp");
-    if(!part_file.is_open()) part_file.open("../source/src/renderparticles.cpp");
+    std::ifstream part_file(ds_path("source/src/renderparticles.cpp"));
     assert(part_file.is_open());
     std::string line;
     bool found_dense_core = false;
@@ -136,8 +132,7 @@ void test_dense_smoke_core()
     assert(found_dense_core && "particle_smokebomb must generate dense inner core");
 
     // 2. Verify weapon.cpp smokezone and ray_hits_smoke
-    std::ifstream weapon_file("source/src/weapon.cpp");
-    if(!weapon_file.is_open()) weapon_file.open("../source/src/weapon.cpp");
+    std::ifstream weapon_file(ds_path("source/src/weapon.cpp"));
     assert(weapon_file.is_open());
     bool found_smokezone = false;
     bool found_ray_hits_smoke = false;
@@ -151,8 +146,7 @@ void test_dense_smoke_core()
     assert(found_ray_hits_smoke);
 
     // 3. Verify bot_util.cpp IsVisible checks ray_hits_smoke
-    std::ifstream bot_file("source/src/bot/bot_util.cpp");
-    if(!bot_file.is_open()) bot_file.open("../source/src/bot/bot_util.cpp");
+    std::ifstream bot_file(ds_path("source/src/bot/bot_util.cpp"));
     assert(bot_file.is_open());
     bool found_bot_smoke_check = false;
     while(std::getline(bot_file, line))

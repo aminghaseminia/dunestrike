@@ -7,6 +7,8 @@
 #include <vector>
 #include <cmath>
 
+#include "test_paths.h"
+
 struct Vec3 {
     float x, y, z;
     Vec3(float _x = 0, float _y = 0, float _z = 0) : x(_x), y(_y), z(_z) {}
@@ -201,8 +203,7 @@ void test_source_code_designated_spawns_enforcement() {
     std::cout << "[Test 3] Verifying C++ source code strict spawn separation...\n";
 
     // 1. Verify clientgame.cpp enforces team spawns first even in arena modes
-    std::ifstream client_file("source/src/clientgame.cpp");
-    if(!client_file.is_open()) client_file.open("../source/src/clientgame.cpp");
+    std::ifstream client_file(ds_path("source/src/clientgame.cpp"));
     assert(client_file.is_open());
 
     std::string line;
@@ -218,8 +219,7 @@ void test_source_code_designated_spawns_enforcement() {
     assert(found_arenaspawn_slot);
 
     // 2. Verify server.cpp distributes spawns per team without overwriting
-    std::ifstream server_file("source/src/server.cpp");
-    if(!server_file.is_open()) server_file.open("../source/src/server.cpp");
+    std::ifstream server_file(ds_path("source/src/server.cpp"));
     assert(server_file.is_open());
 
     bool found_server_team_filter = false;

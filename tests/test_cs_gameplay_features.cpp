@@ -4,6 +4,8 @@
 #include <math.h>
 #include <assert.h>
 
+#include "test_paths.h"
+
 #define RAD (3.14159265358979323846 / 180.0)
 
 struct vec
@@ -84,7 +86,7 @@ int main()
     // Test 3: Radio Commands Keybindings (Z, X, C)
     printf("[Test 3] Verifying CS 1.6 Radio Menus & Binds in Config...\n");
     {
-        FILE *f = fopen("/home/najm-pc20/dunestrike/config/autoexec.cfg", "r");
+        FILE *f = fopen(ds_path("config/autoexec.cfg").c_str(), "r");
         assert(f != NULL);
         char buf[512];
         bool has_z = false, has_x = false, has_c = false, has_f = false;
@@ -121,7 +123,7 @@ int main()
     // Test 5: Bot Team Strats Bomb Mode Integration
     printf("[Test 5] Verifying Dust 2 Bot Tactical Team Strats Hook...\n");
     {
-        FILE *f = fopen("/home/najm-pc20/dunestrike/source/src/bot/bot_ai.cpp", "r");
+        FILE *f = fopen(ds_path("source/src/bot/bot_ai.cpp").c_str(), "r");
         assert(f != NULL);
         char buf[512];
         bool has_bomb_strat = false, has_check_bomb = false;
@@ -138,7 +140,7 @@ int main()
     // Test 6: CS Round End Win Banner & MVP Card
     printf("[Test 6] Verifying CS Round End Win Banner & MVP System...\n");
     {
-        FILE *f = fopen("/home/najm-pc20/dunestrike/source/src/renderhud.cpp", "r");
+        FILE *f = fopen(ds_path("source/src/renderhud.cpp").c_str(), "r");
         assert(f != NULL);
         char buf[512];
         bool has_win_banner = false, has_mvp_banner = false;
@@ -155,7 +157,7 @@ int main()
     // Test 7: CS-Style Scoreboard Overhaul
     printf("[Test 7] Verifying CS-Style Scoreboard Columns & Indicators...\n");
     {
-        FILE *f = fopen("/home/najm-pc20/dunestrike/source/src/scoreboard.cpp", "r");
+        FILE *f = fopen(ds_path("source/src/scoreboard.cpp").c_str(), "r");
         assert(f != NULL);
         char buf[512];
         bool has_dead = false, has_c4 = false, has_kit = false, has_bot = false, has_kills_header = false;

@@ -13,11 +13,12 @@
 #include <cmath>
 #include <zlib.h>
 
+#include "test_paths.h"
+
 void test_server_competitive_parameters()
 {
     std::cout << "[Test 1] Verifying server.cpp competitive parameters...\n";
-    std::ifstream file("source/src/server.cpp");
-    if(!file.is_open()) file.open("../source/src/server.cpp");
+    std::ifstream file(ds_path("source/src/server.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -58,8 +59,7 @@ void test_server_competitive_parameters()
 void test_client_bomb_site_detection()
 {
     std::cout << "[Test 2] Verifying clientgame.cpp bomb site detection radius...\n";
-    std::ifstream file("source/src/clientgame.cpp");
-    if(!file.is_open()) file.open("../source/src/clientgame.cpp");
+    std::ifstream file(ds_path("source/src/clientgame.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -79,8 +79,7 @@ void test_client_bomb_site_detection()
 void test_material_penetration_bonus()
 {
     std::cout << "[Test 3] Verifying weapon.cpp material penetration bonus for wood/crates/doors...\n";
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -143,9 +142,8 @@ struct map_header
 void test_cs_dust2_sites_binary()
 {
     std::cout << "[Test 4] Verifying cs_dust2.cgz map binary flags and layout...\n";
-    const char *path = "packages/maps/official/cs_dust2.cgz";
-    gzFile f = gzopen(path, "rb");
-    if(!f) f = gzopen("../packages/maps/official/cs_dust2.cgz", "rb");
+    const std::string path = ds_path("packages/maps/official/cs_dust2.cgz");
+    gzFile f = gzopen(path.c_str(), "rb");
     assert(f != NULL && "Could not open cs_dust2.cgz");
 
     map_header hdr;

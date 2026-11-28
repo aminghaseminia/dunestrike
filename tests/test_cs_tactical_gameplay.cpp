@@ -11,14 +11,15 @@
 #include <string>
 #include <fstream>
 
+#include "test_paths.h"
+
 enum { NADE_HE = 0, NADE_SMOKE, NADE_FLASH };
 
 // Test 1: Sniper toggle scope and tracer in source code
 void test_sniper_toggle_scope_and_tracer() {
     std::cout << "[Test 1] Verifying Sniper Toggle Scope and Clean Supersonic Tracer...\n";
 
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -49,8 +50,7 @@ void test_sniper_toggle_scope_and_tracer() {
 void test_smoke_and_flashbang() {
     std::cout << "[Test 2] Verifying Tactical Smoke & Flashbang Grenades...\n";
 
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -70,8 +70,7 @@ void test_smoke_and_flashbang() {
     assert(has_setnadetype);
 
     // Verify HUD blinding overlay in renderhud.cpp
-    std::ifstream hud_file("source/src/renderhud.cpp");
-    if(!hud_file.is_open()) hud_file.open("../source/src/renderhud.cpp");
+    std::ifstream hud_file(ds_path("source/src/renderhud.cpp"));
     assert(hud_file.is_open());
     bool has_flash_hud_overlay = false;
     while (std::getline(hud_file, line)) {
@@ -88,8 +87,7 @@ void test_silent_shift_walk() {
     std::cout << "[Test 3] Verifying Silent Shift-Walk Mechanics & Sound Suppression...\n";
 
     // 1. Check speed scaling in physics.cpp
-    std::ifstream phys_file("source/src/physics.cpp");
-    if(!phys_file.is_open()) phys_file.open("../source/src/physics.cpp");
+    std::ifstream phys_file(ds_path("source/src/physics.cpp"));
     assert(phys_file.is_open());
 
     std::string line;
@@ -105,8 +103,7 @@ void test_silent_shift_walk() {
     assert(has_walk_command);
 
     // 2. Check audio suppression in audiomanager.cpp
-    std::ifstream audio_file("source/src/audiomanager.cpp");
-    if(!audio_file.is_open()) audio_file.open("../source/src/audiomanager.cpp");
+    std::ifstream audio_file(ds_path("source/src/audiomanager.cpp"));
     assert(audio_file.is_open());
 
     bool has_silent_footstep = false;
@@ -123,8 +120,7 @@ void test_silent_shift_walk() {
 void test_weapon_drop_and_binds() {
     std::cout << "[Test 4] Verifying Weapon Drop (G key) and Config Binds...\n";
 
-    std::ifstream file("source/src/weapon.cpp");
-    if(!file.is_open()) file.open("../source/src/weapon.cpp");
+    std::ifstream file(ds_path("source/src/weapon.cpp"));
     assert(file.is_open());
 
     std::string line;
@@ -137,8 +133,7 @@ void test_weapon_drop_and_binds() {
     assert(has_dropweapon_command);
 
     // Verify key bindings in autoexec.cfg
-    std::ifstream cfg("config/autoexec.cfg");
-    if(!cfg.is_open()) cfg.open("../config/autoexec.cfg");
+    std::ifstream cfg(ds_path("config/autoexec.cfg"));
     assert(cfg.is_open());
 
     bool has_g_bind = false;

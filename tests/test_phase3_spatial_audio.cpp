@@ -11,12 +11,13 @@
 #include <cassert>
 #include <sys/stat.h>
 
+#include "test_paths.h"
+
 void test_spatial_wall_occlusion()
 {
     std::cout << "[Test 1] Verifying Spatial Wall Occlusion in soundlocation.cpp...\n";
 
-    std::ifstream sl_file("source/src/soundlocation.cpp");
-    if(!sl_file.is_open()) sl_file.open("../source/src/soundlocation.cpp");
+    std::ifstream sl_file(ds_path("source/src/soundlocation.cpp"));
     assert(sl_file.is_open());
 
     std::string line;
@@ -48,8 +49,7 @@ void test_footstep_materials()
     std::cout << "[Test 2] Verifying Footstep Materials & Texture Pattern Detection...\n";
 
     // 1. Verify sound.h has material enum and footstep sound enums
-    std::ifstream sh_file("source/src/sound.h");
-    if(!sh_file.is_open()) sh_file.open("../source/src/sound.h");
+    std::ifstream sh_file(ds_path("source/src/sound.h"));
     assert(sh_file.is_open());
 
     std::string line;
@@ -73,8 +73,7 @@ void test_footstep_materials()
     assert(found_dirt_sound);
 
     // 2. Verify audiomanager.cpp implements get_floor_material
-    std::ifstream am_file("source/src/audiomanager.cpp");
-    if(!am_file.is_open()) am_file.open("../source/src/audiomanager.cpp");
+    std::ifstream am_file(ds_path("source/src/audiomanager.cpp"));
     assert(am_file.is_open());
 
     bool found_get_mat_fn = false;

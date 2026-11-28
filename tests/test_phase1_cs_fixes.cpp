@@ -10,13 +10,14 @@
 #include <string>
 #include <cassert>
 
+#include "test_paths.h"
+
 void test_hudgun_visibility()
 {
     std::cout << "[Test 1] Verifying HUD gun viewmodel visibility guardrails...\n";
 
     // 1. Check main.cpp for hudgun safeguard
-    std::ifstream main_file("source/src/main.cpp");
-    if(!main_file.is_open()) main_file.open("../source/src/main.cpp");
+    std::ifstream main_file(ds_path("source/src/main.cpp"));
     assert(main_file.is_open());
 
     std::string line;
@@ -55,8 +56,7 @@ void test_strict_team_base_spawns()
     std::cout << "[Test 2] Verifying Counter-Strike Team Base Spawning (T vs CT)...\n";
 
     // 1. Verify clientgame.cpp strict team spawn selection
-    std::ifstream client_file("source/src/clientgame.cpp");
-    if(!client_file.is_open()) client_file.open("../source/src/clientgame.cpp");
+    std::ifstream client_file(ds_path("source/src/clientgame.cpp"));
     assert(client_file.is_open());
 
     std::string line;
@@ -74,8 +74,7 @@ void test_strict_team_base_spawns()
     assert(found_team_spawns_loop);
 
     // 2. Verify server.cpp distributes spawns in bomb defusal mode
-    std::ifstream server_file("source/src/server.cpp");
-    if(!server_file.is_open()) server_file.open("../source/src/server.cpp");
+    std::ifstream server_file(ds_path("source/src/server.cpp"));
     assert(server_file.is_open());
 
     bool found_bomb_spawnindex = false;
@@ -95,8 +94,7 @@ void test_universal_freezetime()
     std::cout << "[Test 3] Verifying Universal Freeze-Time for Bots and Players...\n";
 
     // 1. Verify bot.cpp freezes bots in CBot::Think()
-    std::ifstream bot_file("source/src/bot/bot.cpp");
-    if(!bot_file.is_open()) bot_file.open("../source/src/bot/bot.cpp");
+    std::ifstream bot_file(ds_path("source/src/bot/bot.cpp"));
     assert(bot_file.is_open());
 
     std::string line;
@@ -114,8 +112,7 @@ void test_universal_freezetime()
     assert(found_bot_zero_move && "CBot::Think() must zero bot movement during freeze-time");
 
     // 2. Verify weapon.cpp blocks shoot() during freeze-time
-    std::ifstream weapon_file("source/src/weapon.cpp");
-    if(!weapon_file.is_open()) weapon_file.open("../source/src/weapon.cpp");
+    std::ifstream weapon_file(ds_path("source/src/weapon.cpp"));
     assert(weapon_file.is_open());
 
     bool in_shoot_fn = false;
@@ -139,8 +136,7 @@ void test_viewmodel_recoil_kick()
 {
     std::cout << "[Test 4] Verifying Viewmodel Recoil Kickback Animation Values...\n";
 
-    std::ifstream server_h("source/src/server.h");
-    if(!server_h.is_open()) server_h.open("../source/src/server.h");
+    std::ifstream server_h(ds_path("source/src/server.h"));
     assert(server_h.is_open());
 
     std::string line;
