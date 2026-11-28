@@ -2933,6 +2933,11 @@ void startdemoplayback(const char *newname)
 void startgame(const char *newname, int newmode, int newtime, bool notify)
 {
     if(!newname || !*newname || (newmode == GMODE_DEMO && isdedicated)) fatal("startgame() abused");
+    const char *bname = behindpath(newname);
+    if(newmode == 0 && (!strncmp(bname, "cs_", 3) || !strcmp(bname, "dust2") || strstr(bname, "dust2")))
+    {
+        newmode = 22; // Auto-default CS maps to Bomb Defusal mode (22)
+    }
     if(newmode == GMODE_DEMO)
     {
         startdemoplayback(newname);
@@ -4715,6 +4720,12 @@ void process(ENetPacket *packet, int sender, int chan)
                         else
                         {
                             char *vmap = newstring(*vi->text ? behindpath(vi->text) : "");
+                            if(qmode == 0 && (!strncmp(vmap, "cs_", 3) || !strcmp(vmap, "dust2") || strstr(vmap, "dust2")))
+                            {
+                                qmode = 22;
+                                mode = 22 + (mode >= GMODE_NUM ? GMODE_NUM : 0);
+                                vi->num1 = mode;
+                            }
                             vi->action = new mapaction(vmap, qmode, time, sender, qmode!=mode);
                         }
                         break;

@@ -328,7 +328,7 @@ bool collide(physent *d, bool spawn, float drop, float rise)
             {
                 d->o.z = lo+eyeheight;   // stick on step
             }
-            else if(spacelo>-1.26f && d->type!=ENT_BOUNCE) d->o.z += rise;       // rise thru stair
+            else if(spacelo>-1.85f && d->type!=ENT_BOUNCE) d->o.z += rise;       // rise thru stair smoothly
             else return true;
         }
         else
@@ -556,7 +556,7 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
                     {
                         pl->timeinair += curtime;
                         if (pl->trycrouch && !pl->crouching && !pl->crouchedinair && pl->state!=CS_EDITING) {
-                            pl->vel.z += 0.3f;
+                            pl->vel.z += 0.35f; // Extra lift when tucking legs for box mantle / crouch-jump
                             pl->crouchedinair = true;
                         }
                     }
@@ -578,7 +578,7 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
             if(pl->onladder) { dropf = 0; pl->timeinair = 0; }
 
             drop = dropf*curtime/gravity/100/moveres;              // at high fps, gravity kicks in too fast
-            rise = speed/moveres/1.2f;                             // extra smoothness when lifting up stairs
+            rise = max(speed/moveres/1.0f, 0.10f);                 // extra smoothness when lifting up stairs
             if(pl->maxspeed-16.0f>0.5f) pl += 0xF0F0;
         }
     }

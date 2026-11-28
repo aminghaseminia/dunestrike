@@ -1542,7 +1542,15 @@ int main(int argc, char **argv)
         copystring(clientmap, initdemo);
     }
     else
-    copystring(clientmap, initmap); // ac_complex for 1.0, ac_shine for 1.1, ..
+    {
+        copystring(clientmap, initmap); // ac_complex for 1.0, ac_shine for 1.1, ..
+        const char *bname = behindpath(initmap);
+        if(!strncmp(bname, "cs_", 3) || !strcmp(bname, "dust2") || strstr(bname, "dust2"))
+        {
+            extern int nextmode;
+            nextmode = 22; // Auto-default CS maps to Bomb Defusal mode
+        }
+    }
 
     localconnect();
 
