@@ -165,6 +165,9 @@ static inline const char *killmessage_for(int gun, bool gib, int zone)
 #define team_opposite(o) (team_isvalid(o) && (o) < TEAM_SPECT ? (o) ^ 1 : TEAM_SPECT)
 #define team_base(t) ((t) & 1)
 #define team_basestring(t) ((t) == 1 ? teamnames[1] : ((t) == 0 ? teamnames[0] : "SPECT"))
+// display names changed to Terrorists/CT, but the model and flag assets are
+// still stored in CLA/RVSF folders - use this for every asset path
+#define team_assetname(t) ((t) == 1 ? "RVSF" : "CLA")
 #define team_isvalid(t) ((int(t)) >= 0 && (t) < TEAM_NUM)
 #define team_isactive(t) ((t) == TEAM_CLA || (t) == TEAM_RVSF)
 #define team_isspect(t) ((t) > TEAM_RVSF && (t) < TEAM_NUM)
