@@ -1122,6 +1122,7 @@ void calculate_round_mvp(int winning_team)
 
     if(mvp)
     {
+        mvp->mvps++;
         copystring(current_mvp.name, colorname(mvp));
         copystring(current_mvp.reason, reason);
         current_mvp.clientnum = mvp->clientnum;

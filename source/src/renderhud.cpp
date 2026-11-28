@@ -1096,6 +1096,126 @@ void drawkillfeed()
     }
 }
 
+void draw_round_end_banner(int center_x, int base_y)
+{
+    if(bombinfo.state != BOMB_END) return;
+    bool t_win = (bombinfo.result == BOMB_RESULT_ATTACKERS);
+    const char *win_title = t_win ? "TERRORISTS WIN THE ROUND" : "COUNTER-TERRORISTS WIN THE ROUND";
+    const char *win_reason = "";
+    switch(bombinfo.reason)
+    {
+        case BOMB_REASON_EXPLODED:   win_reason = "Target Destroyed (C4 Exploded)"; break;
+        case BOMB_REASON_DEFUSED:    win_reason = "Bomb Defused"; break;
+        case BOMB_REASON_TIME:       win_reason = "Target Protected (Time Expired)"; break;
+        case BOMB_REASON_ELIMINATED: win_reason = t_win ? "All Counter-Terrorists Eliminated" : "All Terrorists Eliminated"; break;
+        default: break;
+    }
+
+    int box_w = 1200;
+    int box_h = 160;
+    int box_x = center_x - box_w / 2;
+    int box_y = base_y;
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Dark translucent background card
+    if(t_win) glColor4ub(35, 8, 8, 225); // Dark Crimson for Terrorists
+    else      glColor4ub(8, 20, 38, 225); // Dark Navy Blue for CT
+
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + box_h);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glEnd();
+
+    // Bold accent stripe on top and bottom
+    if(t_win) glColor4ub(230, 40, 40, 255);
+    else      glColor4ub(50, 140, 245, 255);
+
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + 6);
+    glVertex2f(box_x + box_w, box_y + 6);
+    glEnd();
+
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y + box_h - 6);
+    glVertex2f(box_x + box_w, box_y + box_h - 6);
+    glVertex2f(box_x, box_y + box_h);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glEnd();
+
+    glColor4ub(90, 90, 95, 140);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glVertex2f(box_x, box_y + box_h);
+    glEnd();
+
+    glEnable(GL_TEXTURE_2D);
+
+    defformatstring(title_str)("%s%s", t_win ? "\f3" : "\f1", win_title);
+    int tw = text_width(title_str);
+    draw_text(title_str, center_x - tw / 2, box_y + 32, 255, 255, 255);
+
+    if(win_reason[0])
+    {
+        defformatstring(reason_str)("\f2%s", win_reason);
+        int rw = text_width(reason_str);
+        draw_text(reason_str, center_x - rw / 2, box_y + 95, 255, 255, 255);
+    }
+}
+
+void draw_mvp_banner(int center_x, int base_y)
+{
+    if(current_mvp.displayuntil <= lastmillis || !current_mvp.name[0]) return;
+
+    int box_w = 1000;
+    int box_h = 95;
+    int box_x = center_x - box_w / 2;
+    int box_y = base_y;
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Dark gold/black card background
+    glColor4ub(22, 18, 10, 230);
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + box_h);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glEnd();
+
+    // Gold borders
+    glColor4ub(240, 195, 30, 255);
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + 4);
+    glVertex2f(box_x + box_w, box_y + 4);
+    glEnd();
+
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glVertex2f(box_x, box_y + box_h);
+    glEnd();
+
+    glEnable(GL_TEXTURE_2D);
+
+    defformatstring(mvpline)("\f0★ ROUND MVP: \f1%s \f0(%s) ★", current_mvp.name, current_mvp.reason);
+    int mw = text_width(mvpline);
+    draw_text(mvpline, center_x - mw / 2, box_y + (box_h - FONTH) / 2, 255, 215, 0);
+}
+
 void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwater, int elapsed)
 {
     if(blankouthud > 0) { blankouthud -= elapsed; return; }
@@ -1349,23 +1469,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         }
         else if(bombinfo.state == BOMB_END)
         {
-            bool t_win = (bombinfo.result == BOMB_RESULT_ATTACKERS);
-            const char *win_title = t_win ? "\f3TERRORISTS WIN THE ROUND" : "\f1COUNTER-TERRORISTS WIN THE ROUND";
-            const char *win_reason = "";
-            switch(bombinfo.reason)
-            {
-                case BOMB_REASON_EXPLODED:   win_reason = "Target Destroyed (C4 Exploded)"; break;
-                case BOMB_REASON_DEFUSED:    win_reason = "Bomb Defused"; break;
-                case BOMB_REASON_TIME:       win_reason = "Target Protected (Time Expired)"; break;
-                case BOMB_REASON_ELIMINATED: win_reason = t_win ? "All Counter-Terrorists Eliminated" : "All Terrorists Eliminated"; break;
-                default: break;
-            }
-            draw_text(win_title, (VIRTW*2 - text_width(win_title))/2, y + 2*FONTH, 255, 255, 255);
-            if(win_reason[0])
-            {
-                defformatstring(rline)("\f2(%s)", win_reason);
-                draw_text(rline, (VIRTW*2 - text_width(rline))/2, y + 3*FONTH, 255, 255, 255);
-            }
+            draw_round_end_banner(VIRTW, 380);
         }
 
         if(bombinfo.state == BOMB_PLANTING || bombinfo.state == BOMB_DEFUSING)
@@ -1433,12 +1537,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     }
 
     // CS-Style Round MVP banner
-    if(current_mvp.displayuntil > lastmillis)
-    {
-        defformatstring(mvptext)("\f0★ ROUND MVP: \f1%s \f0(%s) ★", current_mvp.name, current_mvp.reason);
-        int mw = text_width(mvptext);
-        draw_text(mvptext, (VIRTW*2 - mw)/2, 160, 255, 215, 0);
-    }
+    draw_mvp_banner(VIRTW, (bombinfo.state == BOMB_END) ? 570 : 220);
 
     // CS-Style Freeze-time countdown banner
     if(is_freezetime() && !intermission)

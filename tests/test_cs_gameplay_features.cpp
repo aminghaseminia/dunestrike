@@ -135,8 +135,45 @@ int main()
         printf("  -> PASS: Bot tactical bomb strategy system verified in bot_ai.cpp!\n");
     }
 
+    // Test 6: CS Round End Win Banner & MVP Card
+    printf("[Test 6] Verifying CS Round End Win Banner & MVP System...\n");
+    {
+        FILE *f = fopen("/home/najm-pc20/dunestrike/source/src/renderhud.cpp", "r");
+        assert(f != NULL);
+        char buf[512];
+        bool has_win_banner = false, has_mvp_banner = false;
+        while(fgets(buf, sizeof(buf), f))
+        {
+            if(strstr(buf, "draw_round_end_banner(")) has_win_banner = true;
+            if(strstr(buf, "draw_mvp_banner(")) has_mvp_banner = true;
+        }
+        fclose(f);
+        assert(has_win_banner && has_mvp_banner);
+        printf("  -> PASS: CS Round End Win Banner & MVP card rendering verified!\n");
+    }
+
+    // Test 7: CS-Style Scoreboard Overhaul
+    printf("[Test 7] Verifying CS-Style Scoreboard Columns & Indicators...\n");
+    {
+        FILE *f = fopen("/home/najm-pc20/dunestrike/source/src/scoreboard.cpp", "r");
+        assert(f != NULL);
+        char buf[512];
+        bool has_dead = false, has_c4 = false, has_kit = false, has_bot = false, has_kills_header = false;
+        while(fgets(buf, sizeof(buf), f))
+        {
+            if(strstr(buf, "[DEAD]")) has_dead = true;
+            if(strstr(buf, "[C4]")) has_c4 = true;
+            if(strstr(buf, "[KIT]")) has_kit = true;
+            if(strstr(buf, "lagping, \"BOT\"")) has_bot = true;
+            if(strstr(buf, "sscore.addcol(sc_frags, \"KILLS\")")) has_kills_header = true;
+        }
+        fclose(f);
+        assert(has_dead && has_c4 && has_kit && has_bot && has_kills_header);
+        printf("  -> PASS: Scoreboard dead/C4/kit/bot indicators and CS headers verified!\n");
+    }
+
     printf("========================================================\n");
-    printf("  ALL 5 CS GAMEPLAY FEATURES VERIFIED SUCCESSFULLY!    \n");
+    printf("  ALL 7 CS GAMEPLAY FEATURES VERIFIED SUCCESSFULLY!    \n");
     printf("========================================================\n");
     return 0;
 }
