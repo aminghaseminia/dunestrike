@@ -320,6 +320,7 @@ float Get2DDistance(vec v1, vec v2)
 
 bool IsVisible(vec v1, vec v2, dynent *tracer, bool SkipTags)
 {
+     if(ray_hits_smoke(v1, v2)) return false;
      traceresult_s tr;
      TraceLine(v1, v2, tracer, (tracer!=NULL), &tr, SkipTags);
      return !tr.collided;

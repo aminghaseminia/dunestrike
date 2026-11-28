@@ -190,7 +190,7 @@ public:
     int timeinair;                      // used for fake gravity
     float radius, eyeheight, maxeyeheight, aboveeye;  // bounding box size
     bool inwater;
-    bool onfloor, onladder, jumpnext, jumpd, crouching, crouchedinair, trycrouch, cancollide, stuck, scoping;
+    bool onfloor, onladder, jumpnext, jumpd, crouching, crouchedinair, trycrouch, cancollide, stuck, scoping, is_walking;
     int lastjump;
     float lastjumpheight;
     int lastsplash;
@@ -203,7 +203,7 @@ public:
     float tagscale;                     // CS tagging: initial slowdown multiplier (e.g. 0.42f)
 
     physent() : o(0, 0, 0), deltapos(0, 0, 0), newpos(0, 0, 0), yaw(270), pitch(0), roll(0), pitchvel(0),
-            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0),
+            crouching(false), crouchedinair(false), trycrouch(false), cancollide(true), stuck(false), scoping(false), is_walking(false), lastjump(0), lastjumpheight(200), lastsplash(0), state(CS_ALIVE), last_pos(0),
             limpuntil(0), taguntil(0), tagscale(1.0f)
     {
         reset();
@@ -222,7 +222,7 @@ public:
         vel.x = vel.y = vel.z = eyeheightvel = 0.0f;
         move = strafe = 0;
         timeinair = lastjump = lastsplash = 0;
-        onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = false;
+        onfloor = onladder = inwater = jumpnext = jumpd = crouching = crouchedinair = trycrouch = stuck = is_walking = false;
         last_pos = 0;
         limpuntil = 0;
         taguntil = 0;
@@ -322,10 +322,11 @@ public:
     int primary, nextprimary;
     int gunselect;
     bool akimbo;
+    bool has_helmet;
     int ammo[NUMGUNS], mag[NUMGUNS], gunwait[NUMGUNS];
     int pstatshots[NUMGUNS], pstatdamage[NUMGUNS];
 
-    playerstate() : armour(0), primary(GUN_ASSAULT), nextprimary(GUN_ASSAULT), akimbo(false) {}
+    playerstate() : armour(0), primary(GUN_ASSAULT), nextprimary(GUN_ASSAULT), akimbo(false), has_helmet(false) {}
     virtual ~playerstate() {}
 
     void resetstats() { loopi(NUMGUNS) pstatshots[i] = pstatdamage[i] = 0; }
@@ -355,7 +356,7 @@ public:
             case I_AMMO: return ammo[primary]<ammostats[primary].max;
             case I_GRENADE: return mag[GUN_GRENADE]<ammostats[GUN_GRENADE].max;
             case I_HEALTH: return health<powerupstats[type-I_HEALTH].max;
-            case I_HELMET:
+            case I_HELMET: return !has_helmet || armour<powerupstats[type-I_HEALTH].max;
             case I_ARMOUR: return armour<powerupstats[type-I_HEALTH].max;
             case I_AKIMBO: return !akimbo;
             default: return false;
@@ -380,6 +381,8 @@ public:
             case I_GRENADE: additem(ammostats[GUN_GRENADE], mag[GUN_GRENADE]); break;
             case I_HEALTH: additem(powerupstats[type-I_HEALTH], health); break;
             case I_HELMET:
+                has_helmet = true;
+                additem(powerupstats[type-I_HEALTH], armour); break;
             case I_ARMOUR:
                 additem(powerupstats[type-I_HEALTH], armour); break;
             case I_AKIMBO:
@@ -394,6 +397,7 @@ public:
     {
         health = 100;
         armour = 0;
+        has_helmet = false;
         gunselect = GUN_PISTOL;
         akimbo = false;
         loopi(NUMGUNS) ammo[i] = mag[i] = gunwait[i] = 0;
@@ -422,11 +426,13 @@ public:
         gunselect = primary;
 
         if(m_osok) health = 1;
-        if(m_lms) // Survivor && Team-Survivor : 2010nov19
+        if(m_lms || m_bomb) // Survivor && Team-Survivor & Bomb defusal
         {
             health = 100;
             armour = 100;
-            ammo[GUN_GRENADE] = 2;
+            has_helmet = true; // CS standard competitive round spawn loadout: Kevlar + Helmet
+            mag[GUN_GRENADE] = 1;
+            ammo[GUN_GRENADE] = 1;
         }
     }
 
@@ -437,24 +443,25 @@ public:
         {
             damage = health;
             armour = health = 0;
+            has_helmet = false;
             return damage;
         }
 
         guninfo gi = valid_weapon(gun) ? guns[gun] : guns[GUN_PISTOL];
 
-        // Headshots without armor/helmet take unmitigated head damage
-        if(zone == HITZONE_HEAD && armour <= 0)
+        // Headshots:
+        if(zone == HITZONE_HEAD)
         {
-            health -= damage;
-            return damage;
-        }
+            // If target does NOT have a helmet or armor is depleted, take 100% full unmitigated head damage (CS 1-tap)
+            if(!has_helmet || armour <= 0)
+            {
+                health -= damage;
+                return damage;
+            }
 
-        // Armor mitigation:
-        // In CS, armor penetration (gi.piercing) represents % of damage penetrating armor to health.
-        // e.g., 77.5% piercing means 77.5% damage goes to health, 22.5% absorbed by armor.
-        // Armor durability depleted = (damage absorbed) / 2.
-        if(armour > 0)
-        {
+            // Target has Kevlar + Helmet:
+            // Armor penetration (gi.piercing) represents % of damage penetrating helmet to health.
+            // e.g., M4A1 (70% piercing) leaves target alive with ~8 HP; AK-47 (78% piercing) one-taps.
             float pen = clamp(float(gi.piercing) / 100.0f, 0.0f, 1.0f);
             int health_dmg = (int)ceil(damage * pen);
             int armor_absorb = damage - health_dmg;
@@ -467,12 +474,43 @@ public:
             }
             else
             {
-                // Armor exhausted during this hit
+                // Armor & helmet exhausted during this hit
                 damage = health_dmg + (armor_dmg - armour) * 2;
                 armour = 0;
+                has_helmet = false;
+            }
+
+            health -= damage;
+            return damage;
+        }
+
+        // Torso & Stomach (protected by Kevlar body armor):
+        if(zone == HITZONE_TORSO || zone == HITZONE_STOMACH)
+        {
+            if(armour > 0)
+            {
+                float pen = clamp(float(gi.piercing) / 100.0f, 0.0f, 1.0f);
+                int health_dmg = (int)ceil(damage * pen);
+                int armor_absorb = damage - health_dmg;
+                int armor_dmg = max(1, (int)ceil(armor_absorb * 0.5f));
+
+                if(armour >= armor_dmg)
+                {
+                    armour -= armor_dmg;
+                    damage = health_dmg;
+                }
+                else
+                {
+                    damage = health_dmg + (armor_dmg - armour) * 2;
+                    armour = 0;
+                    has_helmet = false;
+                }
+                health -= damage;
+                return damage;
             }
         }
 
+        // Legs and Arms: unmitigated by Kevlar (in CS, limb shots bypass armor)
         health -= damage;
         return damage;
     }
@@ -494,7 +532,7 @@ public:
     int clientnum, lastupdate, plag, ping;
     enet_uint32 address;
     int lifesequence;                   // sequence id for each respawn, used in damage test
-    int frags, flagscore, deaths, tks;
+    int frags, flagscore, deaths, tks, round_kills, mvps;
     int lastaction, lastmove, lastpain, lastvoicecom, lastdeath;
     int lastspawn;
     vec spawnpos;
@@ -506,6 +544,9 @@ public:
     int nextweapon; // weapon we switch to
     int spectatemode, followplayercn;
     int eardamagemillis;
+    int flashendmillis;
+    int flashstartmillis;
+    bool has_defuse_kit;
     float maxroll, maxrolleffect, movroll, effroll;  // roll added by movement and damage
     int ffov, scopefov;
     bool allowmove() { return (state!=CS_DEAD && state!=CS_SPECTATE) || spectatemode==SM_FLY; }
@@ -525,8 +566,8 @@ public:
     bool ignored, muted;
     bool nocorpse;
 
-    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
-                  team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
+    playerent() : curskin(0), clientnum(-1), lastupdate(0), plag(0), ping(0), address(0), lifesequence(0), frags(0), flagscore(0), deaths(0), tks(0), round_kills(0), mvps(0), lastpain(0), lastvoicecom(0), lastdeath(0), lastspawn(0), spawnpos(0, 0, 0), clientrole(CR_DEFAULT),
+                  team(TEAM_SPECT), spectatemode(SM_NONE), followplayercn(FPCN_VOID), eardamagemillis(0), flashendmillis(0), flashstartmillis(0), has_defuse_kit(false), maxroll(ROLLMOVDEF), maxrolleffect(ROLLEFFDEF), movroll(0), effroll(0), ffov(0), scopefov(0),
                   prevweaponsel(NULL), weaponsel(NULL), nextweaponsel(NULL), primweap(NULL), nextprimweap(NULL), lastattackweapon(NULL),
                   smoothmillis(-1),
                   head(-1, -1, -1), ignored(false), muted(false), nocorpse(false)
@@ -564,6 +605,29 @@ public:
         effroll = clamp(effroll + damage, -maxrolleffect, maxrolleffect);
     }
 
+    void aimpunch(int damage, int zone = HITZONE_TORSO)
+    {
+        bool has_protection = false;
+        if(zone == HITZONE_HEAD) has_protection = has_helmet && armour > 0;
+        else if(zone == HITZONE_TORSO || zone == HITZONE_STOMACH) has_protection = armour > 0;
+
+        if(has_protection)
+        {
+            // Protected by Kevlar / Helmet: aim punch is virtually eliminated (5% roll kick, 0 pitch kick)
+            damageroll(damage * 0.05f);
+        }
+        else
+        {
+            // Unarmored: severe CS-style aim punch flinch
+            damageroll(damage);
+            extern physent *camera1;
+            if(this == camera1)
+            {
+                pitch += min(float(damage) * 0.15f, 5.0f); // camera kicks up
+            }
+        }
+    }
+
     void hitpush(int damage, const vec &dir, playerent *actor, int gun)
     {
         if(!valid_weapon(gun)) return;
@@ -594,6 +658,8 @@ public:
         weaponchanging = lastmillis - weapons[gunselect]->weaponchangetime/2; // 2011jan16:ft: for a little no-shoot after spawn
         resetspec();
         eardamagemillis = 0;
+        flashendmillis = flashstartmillis = 0;
+        has_defuse_kit = (team_base(team) == 1);
         eyeheight = maxeyeheight;
         curskin = nextskin[team_base(team)];
         nocorpse = false;
@@ -638,13 +704,13 @@ public:
     int skin(int t = -1) { return nextskin[team_base(t < 0 ? team : t)]; }
     void setskin(int t, int s)
     {
-        const int maxskin[2] = { 4, 4 }; // CS 1.6 Factions (0..3) for CT and T
+        const int maxskin[2] = { 2, 3 }; // CLA has 2 skins (0..1), RVSF has 3 skins (0..2)
         t = team_base(t < 0 ? team : t);
         nextskin[t] = (s & 63) % maxskin[t];
     }
     void startmap()
     {
-        frags = flagscore = deaths = lifesequence = tks = 0;
+        frags = flagscore = deaths = lifesequence = tks = round_kills = mvps = 0;
     }
 };
 
@@ -723,13 +789,16 @@ struct hitmsg
     ivec dir;
 };
 
+enum { NADE_HE = 0, NADE_SMOKE, NADE_FLASH, NADE_MOLOTOV };
+
 class grenadeent : public bounceent
 {
 public:
     bool local;
     int nadestate;
+    int nadetype;
     float distsincebounce;
-    grenadeent(playerent *owner, int millis = 0);
+    grenadeent(playerent *owner, int millis = 0, int type = NADE_HE);
     ~grenadeent();
     void activate(const vec &from, const vec &to);
     void _throw(const vec &from, const vec &vel);

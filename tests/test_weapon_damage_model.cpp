@@ -65,26 +65,26 @@ float get_hitzonescale(int zone) {
 struct TestPlayer {
     int health;
     int armour;
+    bool has_helmet;
 
-    TestPlayer(int h = 100, int a = 100) : health(h), armour(a) {}
+    TestPlayer(int h = 100, int a = 100, bool helm = true) : health(h), armour(a), has_helmet(helm) {}
 
     int apply_damage(int damage, int gun, int zone = HITZONE_TORSO) {
         if (damage == 2147483647) { // INT_MAX
             damage = health;
             armour = health = 0;
+            has_helmet = false;
             return damage;
         }
 
         const TestGunInfo &gi = test_guns[gun];
 
-        // Headshot without armor/helmet: full lethal unmitigated damage
-        if (zone == HITZONE_HEAD && armour <= 0) {
-            health -= damage;
-            return damage;
-        }
-
-        // Armor mitigation with penetration:
-        if (armour > 0) {
+        // Headshot:
+        if (zone == HITZONE_HEAD) {
+            if (!has_helmet || armour <= 0) {
+                health -= damage;
+                return damage;
+            }
             float pen = std::max(0.0f, std::min(1.0f, float(gi.piercing) / 100.0f));
             int health_dmg = (int)std::ceil(damage * pen);
             int armor_absorb = damage - health_dmg;
@@ -96,6 +96,30 @@ struct TestPlayer {
             } else {
                 damage = health_dmg + (armor_dmg - armour) * 2;
                 armour = 0;
+                has_helmet = false;
+            }
+            health -= damage;
+            return damage;
+        }
+
+        // Torso & Stomach (protected by Kevlar body armor):
+        if (zone == HITZONE_TORSO || zone == HITZONE_STOMACH) {
+            if (armour > 0) {
+                float pen = std::max(0.0f, std::min(1.0f, float(gi.piercing) / 100.0f));
+                int health_dmg = (int)std::ceil(damage * pen);
+                int armor_absorb = damage - health_dmg;
+                int armor_dmg = std::max(1, (int)std::ceil(armor_absorb * 0.5f));
+
+                if (armour >= armor_dmg) {
+                    armour -= armor_dmg;
+                    damage = health_dmg;
+                } else {
+                    damage = health_dmg + (armor_dmg - armour) * 2;
+                    armour = 0;
+                    has_helmet = false;
+                }
+                health -= damage;
+                return damage;
             }
         }
 
@@ -158,11 +182,17 @@ void test_m4a1_damage_and_helmet() {
     assert(target_no_armor.health <= 0);
 
     // 2. Armored Headshot: 132 * 0.70 = 92.4 -> 93 dmg (CS M4 headshot dink: ~90-93 dmg, leaves target alive with low HP)
-    TestPlayer target_helmet(100, 100);
+    TestPlayer target_helmet(100, 100, true);
     int taken2 = target_helmet.apply_damage(raw_head, GUN_CARBINE, HITZONE_HEAD);
     assert(taken2 == 93);
     assert(target_helmet.health == 7); // Survived with 7 HP! Authentic CS M4 behavior!
     assert(target_helmet.armour == 80);
+
+    // 3. Kevlar WITHOUT Helmet: 100hp + 100 armor, but has_helmet = false
+    TestPlayer target_kevlar_no_helm(100, 100, false);
+    int taken3 = target_kevlar_no_helm.apply_damage(raw_head, GUN_CARBINE, HITZONE_HEAD);
+    assert(taken3 == 132); // Full 132 unmitigated headshot damage!
+    assert(target_kevlar_no_helm.health <= 0); // One-tap kill because no helmet!
 
     std::cout << "  -> PASS: M4A1 deals 93 dmg dink vs helmet (survives with 7 HP), exactly like CS.\n";
 }

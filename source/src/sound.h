@@ -79,7 +79,26 @@ enum
     S_C4_BEEP,
     S_C4_PLANT,
     S_C4_DISARM,
+    S_FOOTSTEPS_WOOD,
+    S_FOOTSTEPS_METAL,
+    S_FOOTSTEPS_DIRT,
+    S_RADIO_FIREINTHEHOLE,
+    S_RADIO_CTWIN,
+    S_RADIO_TERWIN,
+    S_RADIO_BOMBPLANTED,
+    S_RADIO_BOMBDEFUSED,
+    S_KNIFE_STAB,
     S_NULL
+};
+
+enum
+{
+    MAT_CONCRETE = 0,
+    MAT_WOOD,
+    MAT_METAL,
+    MAT_DIRT,
+    MAT_WATER,
+    MAT_NUM
 };
 
 enum { SC_PAIN = 0, SC_OWNPAIN, SC_WEAPON, SC_PICKUP, SC_MOVEMENT, SC_BULLET, SC_OTHER, SC_VOICECOM, SC_TEAM, SC_PUBLIC, SC_FFA, SC_FLAGONLY, SC_NUM };   // sound categories
@@ -412,6 +431,7 @@ public:
     locvector locations;
 
     audiomanager();
+    float getpitch() const { return currentpitch; }
 
     // init & setup
     void initsound();

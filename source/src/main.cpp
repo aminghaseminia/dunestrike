@@ -470,6 +470,7 @@ void screenshot(const char *filename)
     else if(getclientmap()[0]) formatstring(buf)("screenshots/%s_%s_%s%s", timestring(), behindpath(getclientmap()), modestr(gamemode, true), getscrext());
     else formatstring(buf)("screenshots/%s%s", timestring(), getscrext());
     path(buf);
+    gl_drawframe(screenw, screenh, 1.0f, 60.0f, 0);
     mapscreenshot(buf, false, screenshottype, screenshotscale, 0, jpegquality);
 }
 COMMAND(screenshot, "s");
@@ -1518,6 +1519,7 @@ int main(int argc, char **argv)
 
 
     initing = NOT_INITING;
+    if(hudgun <= 0) hudgun = 1;
     uniformtexres = !hirestextures;
 
     initlog("models");
@@ -1540,7 +1542,15 @@ int main(int argc, char **argv)
         copystring(clientmap, initdemo);
     }
     else
-    copystring(clientmap, initmap); // ac_complex for 1.0, ac_shine for 1.1, ..
+    {
+        copystring(clientmap, initmap); // ac_complex for 1.0, ac_shine for 1.1, ..
+        const char *bname = behindpath(initmap);
+        if(!strncmp(bname, "cs_", 3) || !strcmp(bname, "dust2") || strstr(bname, "dust2"))
+        {
+            extern int nextmode;
+            nextmode = 22; // Auto-default CS maps to Bomb Defusal mode
+        }
+    }
 
     localconnect();
 

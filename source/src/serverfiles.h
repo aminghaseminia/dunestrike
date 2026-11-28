@@ -1027,7 +1027,14 @@ struct servermaprot : serverconfigfile
         {
             defformatstring(nextmapalias)("nextmap_%s", getclientmap());
             const char *map = getalias(nextmapalias);     // look up map in the cycle
-            startgame(map && notify ? map : getclientmap(), getclientmode(), -1, notify);
+            int cmode = getclientmode();
+            const char *targetmap = map && notify ? map : getclientmap();
+            const char *tbname = behindpath(targetmap);
+            if(cmode == 0 && (!strncmp(tbname, "cs_", 3) || !strcmp(tbname, "dust2") || strstr(tbname, "dust2")))
+            {
+                cmode = 22;
+            }
+            startgame(targetmap, cmode, -1, notify);
             return NULL;
         }
 #endif

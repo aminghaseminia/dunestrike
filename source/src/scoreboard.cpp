@@ -200,15 +200,16 @@ void renderscore(playerent *d)
 {
     const char *status = "";
     string lagping;
-    static color localplayerc(0.2f, 0.2f, 0.2f, 0.2f);
+    static color localplayerc(0.2f, 0.2f, 0.2f, 0.25f);
     if(d->clientrole==CR_ADMIN) status = d->state!=CS_ALIVE ? "\f7" : "\f3";
     else if(d->state!=CS_ALIVE) status = "\f4";
-    if (team_isspect(d->team)) copystring(lagping, "SPECT");
-    else if (d->state==CS_LAGGED || (d->ping > 999 && d->plag > 99)) copystring(lagping, "LAG");
+    if(d->type == ENT_BOT) copystring(lagping, "BOT");
+    else if(team_isspect(d->team)) copystring(lagping, "SPECT");
+    else if(d->state==CS_LAGGED || (d->ping > 999 && d->plag > 99)) copystring(lagping, "LAG");
     else
     {
         if(multiplayer(NULL)) formatstring(lagping)("%s/%s", colorpj(d->plag), colorping(d->ping));
-        else formatstring(lagping)("%d/%d", d->plag, d->ping);
+        else formatstring(lagping)("%dms", d->ping);
     }
     const char *ign = d->ignored ? " (ignored)" : (d->muted ? " (muted)" : "");
     sline &line = scorelines.add();
@@ -222,6 +223,17 @@ void renderscore(playerent *d)
     if(multiplayer(NULL) || watchingdemo) line.addcol(sc_lag, "%s", lagping);
 
     line.addcol(sc_clientnum, "\fs\f%d%d\fr", cncolumncolor, d->clientnum);
+
+    defformatstring(prefix)("");
+    if(d->state != CS_ALIVE) concatstring(prefix, "\f4[DEAD] ");
+    if(m_bomb && bombinfo.carrier == d->clientnum) concatstring(prefix, "\f3[C4] ");
+    if(m_bomb && team_base(d->team) != bombinfo.attackerteam && d->has_defuse_kit) concatstring(prefix, "\f0[KIT] ");
+    if(d->mvps > 0)
+    {
+        defformatstring(mvpstr)("\f0★%d ", d->mvps);
+        concatstring(prefix, mvpstr);
+    }
+
     char flagicon = '\0';
     if(m_flags_) //show flag icon at flag carrier with use radaricons font
     {
@@ -230,7 +242,7 @@ void renderscore(playerent *d)
             if(flaginfos[i].state == CTFF_STOLEN && flaginfos[i].actor == d) flagicon = m_ktf ? 'L' : "DH"[i];
         }
     }
-    line.addcol(sc_name, "\fs%s%s\fr%s%s%c ", status, colorname(d), ign, flagicon ? " \a" : "", flagicon);
+    line.addcol(sc_name, "\fs%s%s%s\fr%s%s%c ", status, prefix, colorname(d), ign, flagicon ? " \a" : "", flagicon);
 }
 
 int totalplayers = 0;
@@ -249,11 +261,26 @@ void renderteamscore(teamscore *t)
     line.addcol(sc_deaths, "%d", t->deaths);
     line.addcol(sc_ratio, "%.2f", SCORERATIO(t->frags, t->deaths));
     if(multiplayer(NULL) || watchingdemo) line.addcol(sc_lag);
-    line.addcol(sc_clientnum, "%s", team_string(t->team));
-    int n = t->teammembers.length();
-    line.addcol(sc_name, "(%d %s)", n, n == 1 ? "player" : "players");
 
-    static color teamcolors[2] = { color(1.0f, 0, 0, 0.2f), color(0, 0, 1.0f, 0.2f) };
+    int alive_count = 0;
+    loopv(t->teammembers) if(t->teammembers[i]->state == CS_ALIVE) alive_count++;
+    int n = t->teammembers.length();
+    bool is_t = (team_base(t->team) == TEAM_CLA);
+    const char *tname = is_t ? "TERRORISTS" : "CT";
+
+    if(m_bomb)
+    {
+        int wins = is_t ? bombinfo.wins[0] : bombinfo.wins[1];
+        line.addcol(sc_clientnum, "%s", is_t ? "Terrorists" : "CT");
+        line.addcol(sc_name, "%s (%d alive) - %d WINS", tname, alive_count, wins);
+    }
+    else
+    {
+        line.addcol(sc_clientnum, "%s", is_t ? "Terrorists" : "CT");
+        line.addcol(sc_name, "%s (%d alive / %d total)", tname, alive_count, n);
+    }
+
+    static color teamcolors[2] = { color(0.85f, 0.15f, 0.15f, 0.35f), color(0.15f, 0.35f, 0.85f, 0.35f) };
     line.bgcolor = &teamcolors[team_base(t->team)];
     loopv(t->teammembers) renderscore(t->teammembers[i]);
 }
@@ -267,13 +294,13 @@ void reorderscorecolumns()
     extern void *scoremenu;
     sline sscore;
 
-    if(m_flags_) sscore.addcol(sc_flags, "flags");
-    sscore.addcol(sc_frags, "frags");
-    sscore.addcol(sc_deaths, "deaths");
-    sscore.addcol(sc_ratio, "ratio");
-    if(multiplayer(NULL) || watchingdemo) sscore.addcol(sc_lag, "pj/ping");
-    sscore.addcol(sc_clientnum, "cn");
-    sscore.addcol(sc_name, "name");
+    if(m_flags_) sscore.addcol(sc_flags, "FLAGS");
+    sscore.addcol(sc_frags, "KILLS");
+    sscore.addcol(sc_deaths, "DEATHS");
+    sscore.addcol(sc_ratio, "K/D");
+    if(multiplayer(NULL) || watchingdemo) sscore.addcol(sc_lag, "PING");
+    sscore.addcol(sc_clientnum, "CN");
+    sscore.addcol(sc_name, "PLAYER");
     copystring(scoreboardtitle, sscore.getcols());
     menutitlemanual(scoremenu, scoreboardtitle);
 }

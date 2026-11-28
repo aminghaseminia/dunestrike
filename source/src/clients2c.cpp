@@ -653,6 +653,7 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 player1->lifesequence = getint(p);
                 player1->health = getint(p);
                 player1->armour = getint(p);
+                player1->has_helmet = (player1->armour > 0);
                 player1->setprimary(getint(p));
                 player1->selectweapon(getint(p));
                 int arenaspawn = getint(p);
@@ -662,12 +663,13 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 lastspawn = lastmillis;
                 findplayerstart(player1, false, arenaspawn);
                 arenaintermission = 0;
+                reset_round_stats();
                 if(m_arena && !localwrongmap)
                 {
                     if(curpeer) closemenu(NULL);
                     conoutf("new round starting... fight!");
                     hudeditf(HUDMSG_TIMER, "FIGHT!");
-                    if(m_botmode) BotManager.RespawnBots();
+                    if(m_botmode || m_bomb) BotManager.RespawnBots();
                 }
                 addmsg(SV_SPAWN, "rii", player1->lifesequence, player1->weaponsel->type);
                 player1->weaponswitch(player1->primweap, false);
@@ -1039,6 +1041,12 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 else if(alive==player1) hudoutf("you are the survivor!");
                 else hudoutf("%s is the survivor!", colorname(alive));
                 arenaintermission = lastmillis;
+                if(alive)
+                {
+                    calculate_round_mvp(team_base(alive->team));
+                    if(team_base(alive->team) == TEAM_CLA) audiomgr.playsound(S_RADIO_TERWIN, SP_HIGHEST);
+                    else audiomgr.playsound(S_RADIO_CTWIN, SP_HIGHEST);
+                }
                 break;
             }
 

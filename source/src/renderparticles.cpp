@@ -581,6 +581,36 @@ void particle_splash(int type, int num, int fade, const vec &p)
     }
 }
 
+void particle_smokebomb(const vec &p, int num, int fade)
+{
+    if(fade == 0) fade = 1;
+    // 1. Outer billowed smoke cloud
+    loopi(num)
+    {
+        const int radius = 280;
+        int x, y, z;
+        do
+        {
+            x = rnd(radius*2)-radius;
+            y = rnd(radius*2)-radius;
+            z = rnd(radius)-radius/3;
+        }
+        while(x*x+y*y+z*z>radius*radius);
+        vec d((float)x, (float)y, (float)z);
+        newparticle(p, d, fade/2 + rnd(fade), 1); // 1 = PART_SMOKE
+    }
+    // 2. Dense impenetrable inner core (blocks sightline like CS smoke)
+    loopi(num * 2)
+    {
+        const int core_rad = 140;
+        int x = rnd(core_rad*2)-core_rad;
+        int y = rnd(core_rad*2)-core_rad;
+        int z = rnd(core_rad) - core_rad/4;
+        vec d((float)x, (float)y, (float)z);
+        newparticle(p, d, fade*3/4 + rnd(fade/2), 1);
+    }
+}
+
 void particle_cube(int type, int num, int fade, int x, int y)
 {
     sqr *s = S(x, y);

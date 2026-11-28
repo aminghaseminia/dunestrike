@@ -328,7 +328,7 @@ bool collide(physent *d, bool spawn, float drop, float rise)
             {
                 d->o.z = lo+eyeheight;   // stick on step
             }
-            else if(spacelo>-1.26f && d->type!=ENT_BOUNCE) d->o.z += rise;       // rise thru stair
+            else if(spacelo>-1.85f && d->type!=ENT_BOUNCE) d->o.z += rise;       // rise thru stair smoothly
             else return true;
         }
         else
@@ -440,10 +440,12 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
     else // fake physics for player ents to create _the_ cube movement (tm)
     {
         const int timeinair = pl->timeinair;
-        int move = intermission || (pl->onladder && !pl->onfloor && pl->move == -1) ? 0 : pl->move; // movement on ladder
+        bool frozen = is_freezetime() && pl->state == CS_ALIVE && !editfly && !specfly;
+        int move = intermission || frozen || (pl->onladder && !pl->onfloor && pl->move == -1) ? 0 : pl->move; // movement on ladder
         if(!editfly) water = waterlevel > pl->o.z - 0.5f;
 
         float chspeed = (pl->onfloor || pl->onladder || !pl->crouchedinair) ? 0.4f : 1.0f;
+        float walkspeed = pl->is_walking ? 0.52f : 1.0f; // CS-style silent walk (~130 u/s)
 
         const bool crouching = pl->crouching || (pl->eyeheight < pl->maxeyeheight && pl->eyeheight > 1.1f);
         float tagslow = 1.0f;
@@ -454,7 +456,7 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
             else if(progress > 1.0f) progress = 1.0f;
             tagslow = pl->tagscale + (1.0f - pl->tagscale) * progress;
         }
-        const float speed = curtime/(water ? 2000.0f : 1000.0f)*pl->maxspeed*(crouching && pl->state != CS_EDITING ? chspeed : 1.0f)*(pl==player1 && isfly ? flyspeed : 1.0f)*(pl->limpuntil > lastmillis ? LIMPSPEED : 1.0f)*tagslow;
+        const float speed = curtime/(water ? 2000.0f : 1000.0f)*pl->maxspeed*(crouching && pl->state != CS_EDITING ? chspeed : walkspeed)*(pl==player1 && isfly ? flyspeed : 1.0f)*(pl->limpuntil > lastmillis ? LIMPSPEED : 1.0f)*tagslow;
         const float friction = water ? 20.0f : (pl->onfloor || isfly ? 6.0f : (pl->onladder ? 1.5f : 30.0f));
         const float fpsfric = max(friction/curtime*20.0f, 1.0f);
 
@@ -471,6 +473,13 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
 
         d.x += (float)(pl->strafe*cosf(RAD*(pl->yaw-180)));
         d.y += (float)(pl->strafe*sinf(RAD*(pl->yaw-180)));
+
+        if(frozen)
+        {
+            d = vec(0, 0, 0);
+            pl->vel.x = pl->vel.y = 0;
+            pl->jumpnext = false;
+        }
 
         float curfullspeed = d.magnitudexy();
 
@@ -547,7 +556,7 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
                     {
                         pl->timeinair += curtime;
                         if (pl->trycrouch && !pl->crouching && !pl->crouchedinair && pl->state!=CS_EDITING) {
-                            pl->vel.z += 0.3f;
+                            pl->vel.z += 0.35f; // Extra lift when tucking legs for box mantle / crouch-jump
                             pl->crouchedinair = true;
                         }
                     }
@@ -569,7 +578,7 @@ void moveplayer(physent *pl, int moveres, bool local, int curtime)
             if(pl->onladder) { dropf = 0; pl->timeinair = 0; }
 
             drop = dropf*curtime/gravity/100/moveres;              // at high fps, gravity kicks in too fast
-            rise = speed/moveres/1.2f;                             // extra smoothness when lifting up stairs
+            rise = max(speed/moveres/1.0f, 0.10f);                 // extra smoothness when lifting up stairs
             if(pl->maxspeed-16.0f>0.5f) pl += 0xF0F0;
         }
     }
@@ -866,7 +875,7 @@ void attack(bool on)
 void jumpn(bool on)
 {
     static bool wason = false;
-    player1->jumpnext = on && !wason && !player1->crouching && !intermission && !player1->isspectating() && !ispaused;
+    player1->jumpnext = on && !wason && !player1->crouching && !intermission && !player1->isspectating() && !ispaused && !is_freezetime();
     wason = on;
     if(player1->isspectating())
     {
@@ -890,6 +899,12 @@ void crouch(bool on)
     player1->trycrouch = on;
 }
 
+void walk(bool on)
+{
+    if(player1->isspectating()) return;
+    player1->is_walking = on;
+}
+
 COMMAND(backward, "d");
 COMMAND(forward, "d");
 COMMAND(left, "d");
@@ -897,6 +912,7 @@ COMMAND(right, "d");
 COMMANDN(jump, jumpn, "d");
 COMMAND(attack, "d");
 COMMAND(crouch, "d");
+COMMAND(walk, "d");
 
 void fixcamerarange(physent *cam)
 {
@@ -935,7 +951,13 @@ void mousemove(int idx, int idy)
     if(zooming)
     {                                                                                                                   //      when scoped:
         if(scopesens > 0.0001f) cursens = scopesens;                                                                    //          if specified, use dedicated (fixed) scope sensitivity
-        else cursens *= autoscopesens ? autoscopesensscale : scopesensscale;                                            //          or adjust sensitivity by given (fixed) factor or based on scopefov/fov
+        else
+        {
+            float scale = autoscopesens ? autoscopesensscale : scopesensscale;
+            if(player1->weaponsel->type == GUN_SNIPER && ((sniperrifle *)player1->weaponsel)->scoped == 2)
+                scale *= 0.375f; // scale proportionally for double zoom (15 / 40)
+            cursens *= scale;
+        }
     }
     cursens /= 33.0f * sensitivityscale;                                                                                // final scaling
 

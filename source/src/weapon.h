@@ -101,10 +101,11 @@ struct subgun : gun
 
 struct sniperrifle : gun
 {
-    bool scoped;
+    int scoped; // 0 = unscoped, 1 = zoom 1, 2 = zoom 2 (double zoom)
     int scoped_since;
 
     sniperrifle(playerent *owner);
+    bool attack(vec &targ);
     void attackfx(const vec &from, const vec &to, int millis);
     bool reload(bool autoreloaded);
 
@@ -117,6 +118,7 @@ struct sniperrifle : gun
     void renderhudmodel();
     void renderaimhelp(bool teamwarning);
     void setscope(bool enable);
+    void togglescope();
 };
 
 
@@ -174,9 +176,11 @@ struct akimbo : gun
 
 struct knife : weapon
 {
+    bool is_heavy;
     knife(playerent *owner);
 
     bool attack(vec &targ);
+    void trigger_heavy();
     int modelanim();
 
     void drawstats();

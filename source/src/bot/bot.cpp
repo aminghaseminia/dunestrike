@@ -63,6 +63,10 @@ void CBot::Spawn()
      m_bCombatJump = false;
      m_iCombatJumpDelay = 0;
      m_iHuntDelay = 0;
+     m_iFirstSeenEnemyMillis = 0;
+     m_iReactionLatency = 0;
+     m_iLastTacticalGrenadeMillis = 0;
+     m_iRegroupWaitMillis = 0;
      m_vHuntLocation = m_vPrevHuntLocation = g_vecZero;
      m_pHuntTarget = NULL;
      m_fPrevHuntDist = 0.0f;
@@ -90,6 +94,16 @@ void CBot::Spawn()
 void CBot::Think()
 {
     if (intermission) return;
+    if (is_freezetime())
+    {
+        m_pMyEnt->move = m_pMyEnt->strafe = 0;
+        m_pMyEnt->vel.x = m_pMyEnt->vel.y = 0;
+        m_pMyEnt->attacking = false;
+        m_pMyEnt->jumpnext = false;
+        moveplayer(m_pMyEnt, 1, true);
+        SendBotInfo();
+        return;
+    }
     // Bot is dead?
     if (m_pMyEnt->state == CS_DEAD)
     {

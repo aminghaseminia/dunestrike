@@ -25,6 +25,40 @@ clang++ -O2 -Wall "$DIR/test_bot_audio_removal.cpp" -o "$DIR/test_bot_audio_remo
 clang++ -O2 -Wall "$DIR/test_designated_team_spawns.cpp" -o "$DIR/test_designated_team_spawns"
 clang++ -O2 -Wall "$DIR/test_buyzone_restrictions.cpp" -o "$DIR/test_buyzone_restrictions"
 clang++ -O2 -Wall "$DIR/test_weapons_overhaul.cpp" -o "$DIR/test_weapons_overhaul"
+clang++ -O2 -Wall "$DIR/test_gunplay_wallbang_molotov.cpp" -o "$DIR/test_gunplay_wallbang_molotov"
+clang++ -O2 -Wall "$DIR/test_round_flow_mvp_freezetime.cpp" -o "$DIR/test_round_flow_mvp_freezetime"
+clang++ -O2 -Wall "$DIR/test_tactical_map_competitive.cpp" -lz -o "$DIR/test_tactical_map_competitive"
+clang++ -O2 -Wall "$DIR/test_phase1_cs_fixes.cpp" -o "$DIR/test_phase1_cs_fixes"
+clang++ -O2 -Wall "$DIR/test_phase2_tactical_utilities.cpp" -o "$DIR/test_phase2_tactical_utilities"
+clang++ -O2 -Wall "$DIR/test_phase3_spatial_audio.cpp" -o "$DIR/test_phase3_spatial_audio"
+clang++ -O2 -Wall "$DIR/test_phase4_kevlar_helmet.cpp" -o "$DIR/test_phase4_kevlar_helmet"
+clang++ -O2 -Wall "$DIR/test_radar_crosshair_sniperzoom.cpp" -o "$DIR/test_radar_crosshair_sniperzoom"
+clang++ -O2 -Wall "$DIR/test_cs16_radio_and_dust2_refinements.cpp" -o "$DIR/test_cs16_radio_and_dust2_refinements"
+clang++ -O2 -Wall "$DIR/test_cs_gameplay_features.cpp" -o "$DIR/test_cs_gameplay_features"
+clang++ -O2 -Wall "$DIR/test_cs_tactical_polish.cpp" -o "$DIR/test_cs_tactical_polish"
+clang++ -O2 -Wall "$DIR/test_phase1_stairs_smartmode.cpp" -o "$DIR/test_phase1_stairs_smartmode"
+clang++ -O2 -Wall "$DIR/test_phase2_animations_recoil.cpp" -o "$DIR/test_phase2_animations_recoil"
+clang++ -O2 -Wall "$DIR/test_phase3_bot_tactics.cpp" -o "$DIR/test_phase3_bot_tactics"
+clang++ -O2 -Wall "$DIR/test_phase4_c4_audio_tension.cpp" -o "$DIR/test_phase4_c4_audio_tension"
+clang++ -O2 -Wall "$DIR/test_phase5_quick_loadout.cpp" -o "$DIR/test_phase5_quick_loadout"
+
+echo "[RUN] Running test_phase1_cs_fixes..."
+"$DIR/test_phase1_cs_fixes"
+
+echo "[RUN] Running test_phase2_tactical_utilities..."
+"$DIR/test_phase2_tactical_utilities"
+
+echo "[RUN] Running test_phase3_spatial_audio..."
+"$DIR/test_phase3_spatial_audio"
+
+echo "[RUN] Running test_phase4_kevlar_helmet..."
+"$DIR/test_phase4_kevlar_helmet"
+
+echo "[RUN] Running test_cs_tactical_gameplay..."
+"$DIR/test_cs_tactical_gameplay"
+
+echo "[RUN] Running test_radar_crosshair_sniperzoom..."
+"$DIR/test_radar_crosshair_sniperzoom"
 
 # 2. Run unit tests
 echo "[RUN] Running test_bombsite..."
@@ -71,6 +105,51 @@ echo "[RUN] Running test_buyzone_restrictions..."
 
 echo "[RUN] Running test_weapons_overhaul..."
 "$DIR/test_weapons_overhaul"
+
+echo "[RUN] Running test_gunplay_wallbang_molotov..."
+"$DIR/test_gunplay_wallbang_molotov"
+
+echo "[RUN] Running test_round_flow_mvp_freezetime..."
+"$DIR/test_round_flow_mvp_freezetime"
+
+echo "[RUN] Running test_tactical_map_competitive..."
+"$DIR/test_tactical_map_competitive"
+
+echo "[RUN] Running test_cs_dust2_sites.py..."
+python3 "$DIR/test_cs_dust2_sites.py"
+
+echo "[RUN] Running test_phase1_cs_fixes..."
+"$DIR/test_phase1_cs_fixes"
+
+echo "[RUN] Running test_cs_tactical_gameplay..."
+"$DIR/test_cs_tactical_gameplay"
+
+echo "[RUN] Running test_radar_crosshair_sniperzoom..."
+"$DIR/test_radar_crosshair_sniperzoom"
+
+echo "[RUN] Running test_cs16_radio_and_dust2_refinements..."
+"$DIR/test_cs16_radio_and_dust2_refinements"
+
+echo "[RUN] Running test_cs_gameplay_features..."
+"$DIR/test_cs_gameplay_features"
+
+echo "[RUN] Running test_cs_tactical_polish..."
+"$DIR/test_cs_tactical_polish"
+
+echo "[RUN] Running test_phase1_stairs_smartmode..."
+"$DIR/test_phase1_stairs_smartmode"
+
+echo "[RUN] Running test_phase2_animations_recoil..."
+"$DIR/test_phase2_animations_recoil"
+
+echo "[RUN] Running test_phase3_bot_tactics..."
+"$DIR/test_phase3_bot_tactics"
+
+echo "[RUN] Running test_phase4_c4_audio_tension..."
+"$DIR/test_phase4_c4_audio_tension"
+
+echo "[RUN] Running test_phase5_quick_loadout..."
+"$DIR/test_phase5_quick_loadout"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

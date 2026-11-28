@@ -399,6 +399,7 @@ extern void circle(GLuint tex, float x, float y, float r, float tx, float ty, fl
 extern void framedquadtexture(GLuint tex, int x, int y, int xs, int ys, int border = 0, int backlight = 255, bool blend = false);
 extern void setperspective(float fovy, float aspect, float nearplane, float farplane);
 extern void sethudgunperspective(bool on);
+extern int hudgun;
 extern void gl_drawframe(int w, int h, float changelod, float curfps, int elapsed);
 extern void clearminimap();
 extern void resetzones();
@@ -615,6 +616,24 @@ struct bombinfo_s
 extern bombinfo_s bombinfo;
 extern void bombinfochanged(int oldstate);
 extern void bombcarrierchanged(int oldcarrier);
+extern void bombaction();
+extern void addkillfeed(const char *killer, int kteam, const char *victim, int vteam, int gun, bool headshot, bool backstab);
+
+struct roundmvpdata
+{
+    string name;
+    string reason;
+    int clientnum;
+    int team;
+    int kills;
+    int displayuntil;
+};
+extern roundmvpdata current_mvp;
+extern bool is_freezetime();
+extern void check_freezetime();
+extern int freezetime_end;
+extern void reset_round_stats();
+extern void calculate_round_mvp(int winning_team);
 extern void flagpickup(int fln);
 extern void tryflagdrop(bool manual = false);
 extern void flagreturn(int fln);
@@ -890,6 +909,7 @@ extern void particleinit();
 extern void particlereset();
 extern void particle_flash(int type, float scale, float angle, const vec &p);
 extern void particle_splash(int type, int num, int fade, const vec &p);
+extern void particle_smokebomb(const vec &p, int num, int fade);
 extern void particle_cube(int type, int num, int fade, int x, int y);
 extern void particle_trail(int type, int fade, const vec &from, const vec &to);
 extern void particle_emit(int type, int *args, int basetime, int seed, const vec &p);
@@ -899,6 +919,7 @@ extern bool addbullethole(dynent *d, const vec &from, const vec &to, float radiu
 extern bool addscorchmark(vec &o, float radius = 7);
 extern void render_particles(int time, int typemask = ~0);
 extern const char *particletypenames[MAXPARTYPES + 1];
+extern bool ray_hits_smoke(const vec &from, const vec &to);
 
 // worldio
 enum { LWW_ENTATTROVERFLOW = 0x1, LWW_DECODEERR = 0x10, LWW_WORLDERROR = 0x100, LWW_MISSINGMEDIA = 0x1000, LWW_CONFIGERR = 0x10000, LWW_MODELERR = 0x100000, LWW_SCRIPTERR = 0x1000000 };
@@ -928,6 +949,7 @@ extern int loadallxmaps();
 // physics
 extern float raycube(const vec &o, const vec &ray, vec &surface);
 extern bool raycubelos(const vec &from, const vec &to, float margin = 0);
+extern int get_floor_material(const vec &pos);
 extern int cornertest(int x, int y, int &bx, int &by, int &bs, sqr *&s, sqr *&h);
 extern void moveplayer(physent *pl, int moveres, bool local);
 extern void moveplayer(physent *pl, int moveres, bool local, int curtime);
@@ -974,6 +996,7 @@ extern void addgib(playerent *d);
 extern playerent *playerincrosshair();
 extern int magsize(int gun);
 extern void setscope(bool activate);
+extern void togglescope();
 extern void intersectgeometry(const vec &from, vec &to);
 extern int intersect(playerent *d, const vec &from, const vec &to, vec *end = NULL);
 extern bool intersect(entity *e, const vec &from, const vec &to, vec *end = NULL);

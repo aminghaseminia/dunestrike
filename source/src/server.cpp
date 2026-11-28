@@ -783,10 +783,12 @@ void sendspawn(client *c)
     clientstate &gs = c->state;
     gs.respawn();
     gs.spawnstate(sg->smode);
+    gs.has_defuse_kit = (team_base(c->team) == TEAM_RVSF);
+    gs.has_helmet = (gs.armour > 0);
     gs.lifesequence++;
     sendf(c->clientnum, 1, "ri7vv", SV_SPAWNSTATE, gs.lifesequence,
         gs.health, gs.armour,
-        gs.primary, gs.gunselect, m_arena ? c->spawnindex : -1,
+        gs.primary, gs.gunselect, (m_arena || m_bomb) ? c->spawnindex : -1,
         NUMGUNS, gs.ammo, NUMGUNS, gs.mag);
     gs.lastspawn = sg->gamemillis;
 }
@@ -1639,9 +1641,14 @@ void distributeteam(int team)
         sdistrib.add(ti);
     }
     sdistrib.sort(cmpintasc); // random spawn order
+    int c_idx = 0;
     loopv(clients)
     {
-        clients[i]->spawnindex = sdistrib[i % sdistrib.length()].val;
+        if(clients[i]->type != ST_EMPTY && (team == 100 || (team_isactive(clients[i]->team) && team_base(clients[i]->team) == team)))
+        {
+            clients[i]->spawnindex = sdistrib[c_idx % sdistrib.length()].val;
+            c_idx++;
+        }
     }
 }
 
@@ -1749,13 +1756,13 @@ static inline int bomb_get_halftimerounds()
     return bomb_halftime > 0 ? bomb_halftime : (bomb_roundlimit > 1 ? bomb_roundlimit - 1 : 1);
 }
 SERVPAR(bomb_startdelay, 0, 3, 30, "DSeconds before the first bomb defusal round starts");
-SERVPAR(bomb_roundtime, 30, 90, 900, "DSeconds in a bomb defusal round before defenders win");
+SERVPAR(bomb_roundtime, 30, 115, 900, "DSeconds in a bomb defusal round before defenders win");
 SERVPAR(bomb_planttime, 1, 3, 30, "DSeconds needed to plant the bomb");
 SERVPAR(bomb_defusetime, 1, 5, 30, "DSeconds needed to defuse the bomb");
 SERVPAR(bomb_timer, 10, 40, 180, "DSeconds from planting until the bomb explodes");
-SERVPAR(bomb_siteradius, 1, 3, 20, "DMaximum distance from a bomb site centre");
+SERVPAR(bomb_siteradius, 1, 4, 20, "DMaximum distance from a bomb site centre");
 SERVPAR(bomb_pickupradius, 1, 3, 20, "DMaximum distance to pick up a dropped bomb");
-SERVPAR(bomb_exploderadius, 1, 18, 100, "DRadius of the bomb explosion");
+SERVPAR(bomb_exploderadius, 1, 24, 100, "DRadius of the bomb explosion");
 SERVPAR(bomb_explodedamage, 0, 200, 1000, "DDamage at the centre of the bomb explosion");
 
 static int bombsiteat(const vec &o)
@@ -2125,10 +2132,12 @@ void bombaction(client *cl)
         b.state = BOMB_DEFUSING;
         b.actionactor = cl->clientnum;
         b.actionstart = sg->gamemillis;
-        b.actionduration = bomb_defusetime * 1000;
+        bool with_kit = cl->state.has_defuse_kit;
+        b.actionduration = with_kit ? 5000 : 10000; // CS standard: 5s with kit, 10s without kit
         b.actionend = sg->gamemillis + b.actionduration;
         sendbombinfo();
-        sendservmsg("\f3The bomb is being defused");
+        if(with_kit) sendservmsg("\f3The bomb is being defused (WITH DEFUSE KIT - 5s)");
+        else sendservmsg("\f3The bomb is being defused (WITHOUT KIT - 10s)");
     }
 }
 
@@ -2924,6 +2933,11 @@ void startdemoplayback(const char *newname)
 void startgame(const char *newname, int newmode, int newtime, bool notify)
 {
     if(!newname || !*newname || (newmode == GMODE_DEMO && isdedicated)) fatal("startgame() abused");
+    const char *bname = behindpath(newname);
+    if(newmode == 0 && (!strncmp(bname, "cs_", 3) || !strcmp(bname, "dust2") || strstr(bname, "dust2")))
+    {
+        newmode = 22; // Auto-default CS maps to Bomb Defusal mode (22)
+    }
     if(newmode == GMODE_DEMO)
     {
         startdemoplayback(newname);
@@ -4706,6 +4720,12 @@ void process(ENetPacket *packet, int sender, int chan)
                         else
                         {
                             char *vmap = newstring(*vi->text ? behindpath(vi->text) : "");
+                            if(qmode == 0 && (!strncmp(vmap, "cs_", 3) || !strcmp(vmap, "dust2") || strstr(vmap, "dust2")))
+                            {
+                                qmode = 22;
+                                mode = 22 + (mode >= GMODE_NUM ? GMODE_NUM : 0);
+                                vi->num1 = mode;
+                            }
                             vi->action = new mapaction(vmap, qmode, time, sender, qmode!=mode);
                         }
                         break;

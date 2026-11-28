@@ -98,6 +98,7 @@ void drawscope(bool preload)
     static Texture *scopetex = NULL;
     if(!scopetex) scopetex = textureload("packages/misc/scope.png", 3);
     if(preload) return;
+    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBindTexture(GL_TEXTURE_2D, scopetex->id);
     glColor3ub(255, 255, 255);
@@ -159,6 +160,18 @@ void drawscope(bool preload)
     }
 
     glEnable(GL_BLEND);
+
+    // Classic CS crosshair lines across sniper optic
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(0.0f, 0.0f, 0.0f, 0.85f);
+    glLineWidth(2.5f);
+    glBegin(GL_LINES);
+    glVertex2f(0, VIRTH/2);
+    glVertex2f(VIRTW, VIRTH/2);
+    glVertex2f(VIRTW/2, 0);
+    glVertex2f(VIRTW/2, VIRTH);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
 }
 
 const char *crosshairnames[CROSSHAIR_NUM + 1];  // filled in main.cpp
@@ -209,9 +222,106 @@ void loadcrosshair(const char *type, const char *filename)
 
 COMMAND(loadcrosshair, "ss");
 
+VARP(cscrosshair, 0, 1, 1);
+VARP(cscrosshair_gap, -10, 4, 30);
+VARP(cscrosshair_size, 1, 9, 50);
+VARP(cscrosshair_thickness, 1, 2, 10);
+VARP(cscrosshair_dot, 0, 0, 1);
+VARP(cscrosshair_dynamic, 0, 1, 1);
+
+static inline void draw_hud_rect(float x1, float y1, float x2, float y2)
+{
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(x1, y1);
+    glVertex2f(x2, y1);
+    glVertex2f(x1, y2);
+    glVertex2f(x2, y2);
+    glEnd();
+}
+
 void drawcrosshair(playerent *p, int n, color *c, float size)
 {
     if (cleanedit && editmode) return;
+
+    if(cscrosshair && n != CROSSHAIR_TEAMMATE && !(p && p->scoping))
+    {
+        glDisable(GL_TEXTURE_2D);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        float gap = (float)cscrosshair_gap;
+        float length = (float)cscrosshair_size;
+        float thickness = (float)cscrosshair_thickness;
+
+        if(cscrosshair_dynamic && p)
+        {
+            float speed = hypotf(p->vel.x, p->vel.y);
+            if(speed > 0.05f)
+            {
+                float movespread = min(speed * 32.0f, 18.0f);
+                if(p->crouching) movespread *= 0.35f;
+                if(!p->onfloor) movespread += 12.0f;
+                gap += movespread;
+            }
+            if(p->weaponsel)
+            {
+                int curspread = p->weaponsel->dynspread();
+                int defspread = max(1, (int)p->weaponsel->info.spread);
+                float spread_diff = float(curspread - defspread);
+                if(spread_diff > 0.0f)
+                {
+                    gap += min(spread_diff * 0.5f, 22.0f);
+                }
+            }
+            if(p->crouching && speed <= 0.05f)
+            {
+                gap = max(1.0f, gap - 2.0f);
+            }
+        }
+
+        float cx = VIRTW / 2.0f;
+        float cy = VIRTH / 2.0f;
+        float ht = thickness / 2.0f;
+
+        float cr = 0.0f, cg = 1.0f, cb = 0.0f;
+        if(c) { cr = c->r; cg = c->g; cb = c->b; }
+        else if(crosshairfx == 1 || crosshairfx == 2)
+        {
+            if(!m_osok)
+            {
+                if(p->health <= 25) { cr = 1.0f; cg = 0.0f; cb = 0.0f; }
+                else if(p->health <= 50) { cr = 1.0f; cg = 0.5f; cb = 0.0f; }
+            }
+        }
+
+        // Draw 1px black outline for contrast
+        glColor4f(0.0f, 0.0f, 0.0f, 0.85f);
+        float ot = ht + 1.0f;
+        draw_hud_rect(cx - gap - length - 1.0f, cy - ot, cx - gap + 1.0f, cy + ot);
+        draw_hud_rect(cx + gap - 1.0f, cy - ot, cx + gap + length + 1.0f, cy + ot);
+        draw_hud_rect(cx - ot, cy - gap - length - 1.0f, cx + ot, cy - gap + 1.0f);
+        draw_hud_rect(cx - ot, cy + gap - 1.0f, cx + ot, cy + gap + length + 1.0f);
+
+        if(cscrosshair_dot)
+        {
+            draw_hud_rect(cx - ht - 1.0f, cy - ht - 1.0f, cx + ht + 1.0f, cy + ht + 1.0f);
+        }
+
+        // Inner colored bars
+        glColor4f(cr, cg, cb, 0.95f);
+        draw_hud_rect(cx - gap - length, cy - ht, cx - gap, cy + ht);
+        draw_hud_rect(cx + gap, cy - ht, cx + gap + length, cy + ht);
+        draw_hud_rect(cx - ht, cy - gap - length, cx + ht, cy - gap);
+        draw_hud_rect(cx - ht, cy + gap, cx + ht, cy + gap + length);
+
+        if(cscrosshair_dot)
+        {
+            draw_hud_rect(cx - ht, cy - ht, cx + ht, cy + ht);
+        }
+
+        glEnable(GL_TEXTURE_2D);
+        return;
+    }
+
     Texture *crosshair = crosshairs[n];
     if(!crosshair)
     {
@@ -233,7 +343,7 @@ void drawcrosshair(playerent *p, int n, color *c, float size)
             else if(p->health<=50) glColor3ub(255,128,0);
         }
     }
-    float s = size>0 ? size : (float)crosshairsize;
+    float s = size>0 ? size : (float)(crosshairsize > 0 ? crosshairsize : 15);
     float dynamicscale = 1.0f;
     if((crosshairfx == 1 || crosshairfx == 3) && p && p->weaponsel)
     {
@@ -261,9 +371,30 @@ VARP(damageindicatoralpha, 1, 50, 100);
 int damagedirections[8] = {0};
 void *damageindicatorplayer = NULL;
 
+struct dmg_indicator_hit {
+    float angle;      // angle in degrees (0 = ahead, 90 = right, 180 = behind, 270 = left)
+    int starttime;    // lastmillis when hit
+    int expiretime;   // lastmillis when expired
+};
+#define MAX_DMG_INDICATORS 12
+static dmg_indicator_hit dmg_indicator_hits[MAX_DMG_INDICATORS];
+static int next_dmg_indicator = 0;
+
 void updatedmgindicator(playerent *p, vec &attack)
 {
     if(hidedamageindicator || !damageindicatorsize) return;
+    vec dir = attack;
+    dir.sub(p->o);
+    float attacker_ang = dir.anglexy();
+    float rel_ang = 180.0f - p->yaw - attacker_ang;
+    while(rel_ang < 0.0f) rel_ang += 360.0f;
+    while(rel_ang >= 360.0f) rel_ang -= 360.0f;
+
+    dmg_indicator_hits[next_dmg_indicator].angle = rel_ang;
+    dmg_indicator_hits[next_dmg_indicator].starttime = lastmillis;
+    dmg_indicator_hits[next_dmg_indicator].expiretime = lastmillis + max(500, damageindicatortime);
+    next_dmg_indicator = (next_dmg_indicator + 1) % MAX_DMG_INDICATORS;
+
     vec base_d = p->o;
     base_d.sub(attack);
     damagedirections[(int(742.5f - p->yaw - base_d.anglexy()) / 45) & 0x7] = lastmillis + damageindicatortime;
@@ -272,26 +403,62 @@ void updatedmgindicator(playerent *p, vec &attack)
 
 void drawdmgindicator(playerent *p)
 {
-    if(!damageindicatorsize) return;
+    if(!damageindicatorsize || hidedamageindicator) return;
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_TEXTURE_2D);
-    float size = (float)damageindicatorsize;
-    loopi(8)
-    {
-        if(!damagedirections[i] || damagedirections[i] < lastmillis) continue;
-        float t = damageindicatorsize/(float)(damagedirections[i]-lastmillis);
-        glPushMatrix();
-        glColor4f(0.5f, 0.0f, 0.0f, damageindicatoralpha/100.0f);
-        glTranslatef(VIRTW/2, VIRTH/2, 0);
-        glRotatef(i*45, 0, 0, 1);
-        glTranslatef(0, (float)-damageindicatordist, 0);
-        glScalef(max(0.0f, 1.0f-t), max(0.0f, 1.0f-t), 0);
 
-        glBegin(GL_TRIANGLES);
-        glVertex3f(size/2.0f, size/2.0f, 0.0f);
-        glVertex3f(-size/2.0f, size/2.0f, 0.0f);
-        glVertex3f(0.0f, 0.0f, 0.0f);
+    float base_radius = min(VIRTW, VIRTH) * 0.12f;
+    float arc_thickness = 14.0f;
+    float max_alpha = (damageindicatoralpha > 0 ? damageindicatoralpha : 75) / 100.0f;
+
+    loopi(MAX_DMG_INDICATORS)
+    {
+        dmg_indicator_hit &hit = dmg_indicator_hits[i];
+        if(!hit.expiretime || hit.expiretime <= lastmillis) continue;
+
+        float total_dur = float(hit.expiretime - hit.starttime);
+        if(total_dur <= 0.0f) continue;
+        float progress = float(lastmillis - hit.starttime) / total_dur;
+        if(progress < 0.0f || progress > 1.0f) continue;
+
+        float alpha = (1.0f - progress * progress) * max_alpha;
+        float radius = base_radius + progress * 24.0f;
+        float r_inner = radius - arc_thickness * 0.5f;
+        float r_outer = radius + arc_thickness * 0.5f;
+
+        glPushMatrix();
+        glTranslatef(VIRTW / 2.0f, VIRTH / 2.0f, 0);
+        glRotatef(hit.angle, 0, 0, 1);
+
+        const int SEGMENTS = 14;
+        const float HALF_SPAN = 28.0f;
+        glBegin(GL_TRIANGLE_STRIP);
+        for(int s = 0; s <= SEGMENTS; s++)
+        {
+            float deg = -HALF_SPAN + (float(s) / SEGMENTS) * (HALF_SPAN * 2.0f);
+            float rad = deg * RAD;
+            float tip_factor = cosf((deg / HALF_SPAN) * (PI / 2.0f));
+            float a = alpha * tip_factor;
+
+            glColor4f(0.95f, 0.08f, 0.08f, a);
+            glVertex2f(sinf(rad) * r_outer, -cosf(rad) * r_outer);
+
+            glColor4f(0.80f, 0.02f, 0.02f, a * 0.4f);
+            glVertex2f(sinf(rad) * r_inner, -cosf(rad) * r_inner);
+        }
         glEnd();
+
+        float chev_h = 10.0f;
+        float chev_w = 12.0f;
+        float chev_y = -r_outer - 2.0f;
+        glBegin(GL_TRIANGLES);
+        glColor4f(1.0f, 0.2f, 0.2f, alpha);
+        glVertex2f(0.0f, chev_y - chev_h);
+        glColor4f(0.8f, 0.05f, 0.05f, alpha * 0.6f);
+        glVertex2f(-chev_w * 0.5f, chev_y);
+        glVertex2f(chev_w * 0.5f, chev_y);
+        glEnd();
+
         glPopMatrix();
     }
     glEnable(GL_TEXTURE_2D);
@@ -347,6 +514,7 @@ void drawequipicons(playerent *p)
 
     // health & armor
     if(p->armour) drawequipicon(HUDPOS_ARMOUR*2, 1650, (p->armour-1)/25, 2);
+    else drawequipicon(HUDPOS_ARMOUR*2, 1650, 0, 2);
     drawequipicon(HUDPOS_HEALTH*2, 1650, 2, 3);
     if(p->mag[GUN_GRENADE]) drawequipicon(oldfashionedgunstats ? (HUDPOS_GRENADE + (((float)screenw / (float)screenh > 1.5f) ? 75 : 25)) * 2 : HUDPOS_GRENADE*2, 1650, 3, 1);
 
@@ -512,10 +680,27 @@ void drawradar_showmap(playerent *p, int w, int h)
         glEnable(GL_TEXTURE_2D);
     }
     glTranslatef(centerpos.x - halfviewsize, centerpos.y - halfviewsize , 0);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
-    quad(minimaptex, 0, 0, minimapviewsize, 0.0f, 0.0f, 1.0f);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_BLEND);
+    static Texture *cached_showmap_radar = NULL;
+    static string cached_showmap_name = "";
+    if(strcmp(cached_showmap_name, getclientmap()))
+    {
+        copystring(cached_showmap_name, getclientmap());
+        defformatstring(rp)("packages/maps/radar/%s.png", behindpath(getclientmap()));
+        cached_showmap_radar = fileexists(findfile(rp, "rb"), "r") ? textureload(rp, 3) : NULL;
+    }
+    if(cached_showmap_radar)
+    {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        quad(cached_showmap_radar->id, 0, 0, minimapviewsize, 0.0f, 0.0f, 1.0f);
+    }
+    else
+    {
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+        quad(minimaptex, 0, 0, minimapviewsize, 0.0f, 0.0f, 1.0f);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_BLEND);
+    }
 
     float gdim = max(clmapdims.xspan, clmapdims.yspan); //no border
     float offd = fabs((clmapdims.yspan - clmapdims.xspan) / 2.0f);
@@ -632,9 +817,37 @@ void drawradar_vicinity(playerent *p, int w, int h)
     glTranslatef(-halfviewsize, -halfviewsize, 0);
     vec d4rc = vec(d->o).sub(rsd).normalize().mul(0);
     vec usecenter = vec(d->o).sub(rtr).sub(d4rc);
-    glDisable(GL_BLEND);
+
+    static Texture *cached_vicinity_radar = NULL;
+    static string cached_vicinity_name = "";
+    if(strcmp(cached_vicinity_name, getclientmap()))
+    {
+        copystring(cached_vicinity_name, getclientmap());
+        defformatstring(rp)("packages/maps/radar/%s.png", behindpath(getclientmap()));
+        cached_vicinity_radar = fileexists(findfile(rp, "rb"), "r") ? textureload(rp, 3) : NULL;
+    }
+
+    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    circle(minimaptex, halfviewsize, halfviewsize, halfviewsize, usecenter.x/(float)gdim, usecenter.y/(float)gdim, scaleh, 31); //Draw mimimaptext as radar background
+    glColor4f(0.06f, 0.09f, 0.13f, 0.85f);
+    static Texture *solid_disc_tex = NULL;
+    if(!solid_disc_tex) solid_disc_tex = textureload("packages/misc/compass-base.png", 3);
+    if(solid_disc_tex)
+    {
+        circle(solid_disc_tex->id, halfviewsize, halfviewsize, halfviewsize, 0.5f, 0.5f, 0.5f, 31);
+    }
+
+    if(cached_vicinity_radar)
+    {
+        glColor4f(1.0f, 1.0f, 1.0f, 0.95f);
+        circle(cached_vicinity_radar->id, halfviewsize, halfviewsize, halfviewsize, usecenter.x/(float)gdim, usecenter.y/(float)gdim, scaleh, 31);
+    }
+    else
+    {
+        glDisable(GL_BLEND);
+        circle(minimaptex, halfviewsize, halfviewsize, halfviewsize, usecenter.x/(float)gdim, usecenter.y/(float)gdim, scaleh, 31);
+        glEnable(GL_BLEND);
+    }
     glTranslatef(halfviewsize, halfviewsize, 0);
 
     if(!(p->isspectating() && spect3rd)) drawradarent(0, 0, p->yaw, (p->state==CS_ALIVE || p->state==CS_EDITING) ? (isattacking(p) ? 2 : 0) : 1, 2, iconsize, isattacking(p), "%s", colorname(p)); // local player
@@ -647,15 +860,17 @@ void drawradar_vicinity(playerent *p, int w, int h)
         if(p->team < TEAM_SPECT && ((m_teammode && !isteam(p_baseteam, pl_baseteam)) || (!m_teammode && !(spect3rd && d == pl)))) continue;
         if(p->team == TEAM_SPECT && !(spect3rd && (isteam(p_baseteam, pl_baseteam) || d == pl))) continue;
         vec rtmp = vec(pl->o).sub(d->o);
-        bool isok = rtmp.sqrxy() < d2s;
-        if(isok)
+        float dist = sqrtf(rtmp.x*rtmp.x + rtmp.y*rtmp.y);
+        float maxdist = radarheight / 2.0f;
+        if(dist > maxdist && maxdist > 0)
         {
-            rtmp.mul(scaled);
-            drawradarent(rtmp.x, rtmp.y, pl->yaw, pl->state==CS_ALIVE ? (isattacking(pl) ? 2 : 0) : 1, spect3rd && d == pl ? 2 : pl_baseteam, iconsize, isattacking(pl), "%s", colorname(pl));
-            if(m_bomb && bombinfo.carrier == pl->clientnum)
-            {
-                drawradarent(rtmp.x + iconsize*0.4f, rtmp.y - iconsize*0.4f, 0, 2, 3, iconsize*0.75f, true);
-            }
+            rtmp.mul(maxdist * 0.92f / dist); // Clamp teammate to radar border so they remain visible across entire map
+        }
+        rtmp.mul(scaled);
+        drawradarent(rtmp.x, rtmp.y, pl->yaw, pl->state==CS_ALIVE ? (isattacking(pl) ? 2 : 0) : 1, spect3rd && d == pl ? 2 : pl_baseteam, iconsize, isattacking(pl), "%s", colorname(pl));
+        if(m_bomb && bombinfo.carrier == pl->clientnum)
+        {
+            drawradarent(rtmp.x + iconsize*0.4f, rtmp.y - iconsize*0.4f, 0, 2, 3, iconsize*0.75f, true);
         }
     }
     if(m_flags_)
@@ -799,7 +1014,8 @@ void drawteamicons(int w, int h, bool spect)
     glColor3f(1, 1, 1);
     static Texture *icons = NULL;
     if(!icons) icons = textureload("packages/misc/teamicons.png", 3);
-    if(player1->team < TEAM_SPECT || spect) quad(icons->id, VIRTW-VIRTH/12-10, 10, VIRTH/12, team_base(spect ? players[player1->followplayercn]->team : player1->team) ? 0.5f : 0, 0, 0.49f, 1.0f);
+    float s = 60.0f;
+    if(player1->team < TEAM_SPECT || spect) quad(icons->id, VIRTW - s - 20, 15, s, team_base(spect ? players[player1->followplayercn]->team : player1->team) ? 0.5f : 0, 0, 0.49f, 1.0f);
 }
 
 int damageblendmillis = 0;
@@ -940,6 +1156,267 @@ void drawmodeinfo()
     draw_text(obj,  x2, y2, 210, 230, 180, 235);
 }
 
+struct killfeed_item
+{
+    string killer;
+    string victim;
+    int kteam;
+    int vteam;
+    int gun;
+    bool headshot;
+    bool backstab;
+    int millis;
+};
+
+#define MAX_KILLFEED 6
+static vector<killfeed_item> killfeed_items;
+
+void addkillfeed(const char *killer, int kteam, const char *victim, int vteam, int gun, bool headshot, bool backstab)
+{
+    killfeed_item k;
+    copystring(k.killer, killer ? killer : "");
+    k.kteam = kteam;
+    copystring(k.victim, victim ? victim : "");
+    k.vteam = vteam;
+    k.gun = gun;
+    k.headshot = headshot;
+    k.backstab = backstab;
+    k.millis = totalmillis;
+    killfeed_items.add(k);
+    if(killfeed_items.length() > MAX_KILLFEED) killfeed_items.remove(0);
+}
+
+void drawkillfeed()
+{
+    if(killfeed_items.empty()) return;
+    static Texture *itemstex = NULL;
+    if(!itemstex) itemstex = textureload("packages/misc/items.png", 3);
+
+    int start_y = 155; // positioned cleanly below the top-right timer and team badge
+    int right_margin = VIRTW * 2 - 40;
+    int row_h = 70;
+
+    loopvrev(killfeed_items)
+    {
+        if(totalmillis - killfeed_items[i].millis > 7000)
+            killfeed_items.remove(i);
+    }
+
+    loopv(killfeed_items)
+    {
+        killfeed_item &k = killfeed_items[i];
+        int age = totalmillis - k.millis;
+        if(age > 7000) continue;
+
+        float alpha = 1.0f;
+        if(age > 6000) alpha = 1.0f - (age - 6000) / 1000.0f;
+        int a_ub = clamp((int)(alpha * 255), 0, 255);
+
+        // CLA (Terrorists) = Red (\f3), RVSF (CT) = Blue (\f1)
+        const char *kcol = (k.kteam == TEAM_CLA) ? "\f3" : ((k.kteam == TEAM_RVSF) ? "\f1" : "\f0");
+        const char *vcol = (k.vteam == TEAM_CLA) ? "\f3" : ((k.vteam == TEAM_RVSF) ? "\f1" : "\f0");
+
+        defformatstring(kstr)("%s%s", kcol, k.killer[0] ? k.killer : "world");
+        defformatstring(vstr)("%s%s", vcol, k.victim);
+
+        int kw = text_width(kstr);
+        int vw = text_width(vstr);
+        int iconsize = 65;
+
+        const char *special_str = "";
+        if(k.headshot) special_str = " \f3[HS]";
+        else if(k.backstab) special_str = " \f3[STAB]";
+        int sw = text_width(special_str);
+
+        int total_w = kw + 15 + iconsize + 15 + sw + 10 + vw;
+        int box_x = right_margin - total_w - 20;
+        int box_y = start_y + i * (row_h + 10);
+        int box_w = total_w + 30;
+        int box_h = row_h;
+
+        // Draw translucent dark background box behind killfeed notice
+        glDisable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4ub(15, 15, 18, (uchar)(alpha * 190));
+
+        glBegin(GL_TRIANGLE_STRIP);
+        glVertex2f(box_x, box_y);
+        glVertex2f(box_x + box_w, box_y);
+        glVertex2f(box_x, box_y + box_h);
+        glVertex2f(box_x + box_w, box_y + box_h);
+        glEnd();
+
+        // Border outline
+        glColor4ub(80, 80, 85, (uchar)(alpha * 120));
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(box_x, box_y);
+        glVertex2f(box_x + box_w, box_y);
+        glVertex2f(box_x + box_w, box_y + box_h);
+        glVertex2f(box_x, box_y + box_h);
+        glEnd();
+
+        glEnable(GL_TEXTURE_2D);
+
+        // Draw killer name
+        int cur_x = box_x + 15;
+        int text_y = box_y + (box_h - FONTH) / 2;
+        draw_text(kstr, cur_x, text_y, 255, 255, 255, a_ub);
+        cur_x += kw + 15;
+
+        // Draw weapon graphic icon from items.png
+        if(itemstex && valid_weapon(k.gun))
+        {
+            int c = k.gun != GUN_GRENADE ? k.gun : 3, r = 0;
+            if(c == GUN_AKIMBO) c = GUN_PISTOL;
+            if(c > 3) { c -= 4; r = 1; }
+            if(k.gun == GUN_GRENADE) { c = 3; r = 1; }
+
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glColor4ub(255, 255, 255, a_ub);
+            float icon_y = box_y + (box_h - iconsize) / 2.0f;
+            drawicon(itemstex, cur_x, icon_y, iconsize, c, r, 0.25f);
+        }
+        else
+        {
+            const char *wname = valid_weapon(k.gun) ? guns[k.gun].title : "x";
+            draw_text(wname, cur_x, text_y, 200, 200, 200, a_ub);
+        }
+        cur_x += iconsize + 10;
+
+        // Draw special (Headshot / Backstab)
+        if(special_str[0])
+        {
+            draw_text(special_str, cur_x, text_y, 255, 255, 255, a_ub);
+            cur_x += sw + 10;
+        }
+
+        // Draw victim name
+        draw_text(vstr, cur_x, text_y, 255, 255, 255, a_ub);
+    }
+}
+
+void draw_round_end_banner(int center_x, int base_y)
+{
+    if(bombinfo.state != BOMB_END) return;
+    bool t_win = (bombinfo.result == BOMB_RESULT_ATTACKERS);
+    const char *win_title = t_win ? "TERRORISTS WIN THE ROUND" : "COUNTER-TERRORISTS WIN THE ROUND";
+    const char *win_reason = "";
+    switch(bombinfo.reason)
+    {
+        case BOMB_REASON_EXPLODED:   win_reason = "Target Destroyed (C4 Exploded)"; break;
+        case BOMB_REASON_DEFUSED:    win_reason = "Bomb Defused"; break;
+        case BOMB_REASON_TIME:       win_reason = "Target Protected (Time Expired)"; break;
+        case BOMB_REASON_ELIMINATED: win_reason = t_win ? "All Counter-Terrorists Eliminated" : "All Terrorists Eliminated"; break;
+        default: break;
+    }
+
+    int box_w = 1200;
+    int box_h = 160;
+    int box_x = center_x - box_w / 2;
+    int box_y = base_y;
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Dark translucent background card
+    if(t_win) glColor4ub(35, 8, 8, 225); // Dark Crimson for Terrorists
+    else      glColor4ub(8, 20, 38, 225); // Dark Navy Blue for CT
+
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + box_h);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glEnd();
+
+    // Bold accent stripe on top and bottom
+    if(t_win) glColor4ub(230, 40, 40, 255);
+    else      glColor4ub(50, 140, 245, 255);
+
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + 6);
+    glVertex2f(box_x + box_w, box_y + 6);
+    glEnd();
+
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y + box_h - 6);
+    glVertex2f(box_x + box_w, box_y + box_h - 6);
+    glVertex2f(box_x, box_y + box_h);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glEnd();
+
+    glColor4ub(90, 90, 95, 140);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glVertex2f(box_x, box_y + box_h);
+    glEnd();
+
+    glEnable(GL_TEXTURE_2D);
+
+    defformatstring(title_str)("%s%s", t_win ? "\f3" : "\f1", win_title);
+    int tw = text_width(title_str);
+    draw_text(title_str, center_x - tw / 2, box_y + 32, 255, 255, 255);
+
+    if(win_reason[0])
+    {
+        defformatstring(reason_str)("\f2%s", win_reason);
+        int rw = text_width(reason_str);
+        draw_text(reason_str, center_x - rw / 2, box_y + 95, 255, 255, 255);
+    }
+}
+
+void draw_mvp_banner(int center_x, int base_y)
+{
+    if(current_mvp.displayuntil <= lastmillis || !current_mvp.name[0]) return;
+
+    int box_w = 1000;
+    int box_h = 95;
+    int box_x = center_x - box_w / 2;
+    int box_y = base_y;
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Dark gold/black card background
+    glColor4ub(22, 18, 10, 230);
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + box_h);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glEnd();
+
+    // Gold borders
+    glColor4ub(240, 195, 30, 255);
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x, box_y + 4);
+    glVertex2f(box_x + box_w, box_y + 4);
+    glEnd();
+
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(box_x, box_y);
+    glVertex2f(box_x + box_w, box_y);
+    glVertex2f(box_x + box_w, box_y + box_h);
+    glVertex2f(box_x, box_y + box_h);
+    glEnd();
+
+    glEnable(GL_TEXTURE_2D);
+
+    defformatstring(mvpline)("\f0★ ROUND MVP: \f1%s \f0(%s) ★", current_mvp.name, current_mvp.reason);
+    int mw = text_width(mvpline);
+    draw_text(mvpline, center_x - mw / 2, box_y + (box_h - FONTH) / 2, 255, 215, 0);
+}
+
 void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwater, int elapsed)
 {
     if(blankouthud > 0) { blankouthud -= elapsed; return; }
@@ -1018,18 +1495,18 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     if(p->state==CS_ALIVE || p->state==CS_EDITING)
     {
         bool drawteamwarning = crosshairteamsign && targetplayer && isteam(targetplayer->team, p->team) && targetplayer->state==CS_ALIVE;
-        if(!reloading) p->weaponsel->renderaimhelp(drawteamwarning);
+        p->weaponsel->renderaimhelp(drawteamwarning);
         if(!editmode && !showmap) drawktfindicator(p);
     }
 
     // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // without below condition it was always set in drawdmgindicator()
     if(damageindicatorplayer == p || (is_spect && getclient(player1->followplayercn) == damageindicatorplayer)) drawdmgindicator(p);
 
-    if(p->state==CS_ALIVE && !hidehudequipment) drawequipicons(p);
+    if(p->state==CS_ALIVE) drawequipicons(p);
 
     if(!editmode)
     {
-        if((!hideradar || showmap) && player1->spectatemode <= SM_FLY) drawradar(p, w, h); // EDITMINIMAP: radar/showmap in editmode will be out-of-date
+        if(player1->spectatemode <= SM_FLY) drawradar(p, w, h); // Always draw radar during gameplay (spectatemode <= SM_FLY)
         glMatrixMode(GL_MODELVIEW);
         if(!hideteam && m_teammode) drawteamicons(w, h, is_spect);
         glMatrixMode(GL_PROJECTION);
@@ -1054,7 +1531,18 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     }
     glLoadIdentity();
     glOrtho(0, VIRTW*2, VIRTH*2, 0, -1, 1);
+    if(targetplayer && isteam(targetplayer->team, p->team) && targetplayer->state == CS_ALIVE)
+    {
+        // Display teammate name centered directly beneath the prohibition crosshair
+        defformatstring(mate_str)("%s", colorname(targetplayer));
+        int mw = text_width(mate_str);
+        int mx = VIRTW - mw / 2;
+        int my = VIRTH + 52;
+        draw_text(mate_str, mx + 2, my + 2, 0, 0, 0, 220);
+        draw_text(mate_str, mx, my, 255, 255, 255, 255);
+    }
     drawmodeinfo();
+    drawkillfeed();
     extern void r_accuracy(int h);
     extern void *scoremenu;
     extern gmenu *curmenu;
@@ -1147,7 +1635,11 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             }
         }
         formatstring(gtime)("%02d:%02d", gtmin, gtsec);
-        if(gametimedisplay) draw_text(gtime, (VIRTW-225-10)*2 - (text_width(gtime)/2 + FONTH/2), 20);
+        if(gametimedisplay)
+        {
+            int tw = text_width(gtime);
+            draw_text(gtime, VIRTW*2 - tw - 175, 42);
+        }
     }
 
     if(m_bomb && !intermission)
@@ -1158,7 +1650,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         int htr = bomb_halftime > 0 ? bomb_halftime : (blimit > 1 ? blimit - 1 : 1);
         const char *halfinfo = bombinfo.round <= htr ? "1st Half" : "2nd Half";
         bool matchpoint = (bombinfo.wins[0] == blimit - 1 || bombinfo.wins[1] == blimit - 1);
-        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d (%s)%s",
+        defformatstring(scoreline)("\f3T %d  \f7-  \f1%d CT   \f3Round %d (%s)%s",
             bombinfo.wins[0], bombinfo.wins[1], bombinfo.round, halfinfo, matchpoint ? " \f2[MATCH POINT]" : "");
         draw_text(scoreline, (VIRTW*2 - text_width(scoreline))/2, y, 255, 255, 255);
 
@@ -1190,6 +1682,10 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             formatstring(timerline)("\f3round time %02d:%02d", remaining/60000, (remaining/1000)%60);
             draw_text(timerline, (VIRTW*2 - text_width(timerline))/2, y + 2*FONTH, 255, 255, 255);
         }
+        else if(bombinfo.state == BOMB_END)
+        {
+            draw_round_end_banner(VIRTW, 380);
+        }
 
         if(bombinfo.state == BOMB_PLANTING || bombinfo.state == BOMB_DEFUSING)
         {
@@ -1198,8 +1694,9 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             if(pct < 0) pct = 0;
             else if(pct > 100) pct = 100;
             const char *sitename = (bombinfo.site == 0 ? "SITE A" : (bombinfo.site == 1 ? "SITE B" : "SITE ?"));
-            defformatstring(actionline)("\f3%s AT %s (%d%%)",
-                bombinfo.state == BOMB_PLANTING ? "PLANTING" : "DEFUSING",
+            defformatstring(actionline)("%s AT %s (%d%%)",
+                bombinfo.state == BOMB_PLANTING ? "\f3PLANTING C4" :
+                (bombinfo.actionduration <= 6000 ? "\f0DEFUSING WITH KIT [5s]" : "\f3DEFUSING WITHOUT KIT [10s]"),
                 sitename,
                 pct);
             draw_text(actionline, (VIRTW*2 - text_width(actionline))/2, y + 3*FONTH, 255, 255, 255);
@@ -1216,12 +1713,12 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 if(bombinfo.sites[i].x >= 0)
                 {
                     float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
-                    if(dx*dx + dy*dy <= 9.0f) { atsite = i; break; }
+                    if(dx*dx + dy*dy <= 16.0f) { atsite = i; break; }
                 }
             }
             if(atsite >= 0)
             {
-                formatstring(hintbuf)("\f1press F or right-click to plant at Site %c", atsite == 0 ? 'A' : 'B');
+                formatstring(hintbuf)("\f0>>> [ BOMBSITE %c ] HOLD [E] TO PLANT BOMB <<<", atsite == 0 ? 'A' : 'B');
                 hint = hintbuf;
             }
             else
@@ -1231,7 +1728,13 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         }
         else if(bombinfo.state == BOMB_PLANTED && team_isactive(player1->team) && team_base(player1->team) != bombinfo.attackerteam)
         {
-            if(player1->o.dist(bombinfo.pos) <= 4.0f) hint = "\f1press F or right-click to defuse the bomb";
+            if(player1->o.dist(bombinfo.pos) <= 4.0f)
+            {
+                if(player1->has_defuse_kit)
+                    hint = "\f0>>> HOLD [E] TO DEFUSE BOMB [WITH KIT: 5s] <<<";
+                else
+                    hint = "\f3>>> HOLD [E] TO DEFUSE BOMB [WITHOUT KIT: 10s] <<<";
+            }
         }
         else if(bombinfo.state == BOMB_LIVE && bombinfo.carrier < 0 && bombinfo.dropped)
             hint = "\f3the bomb is on the ground";
@@ -1246,6 +1749,25 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 draw_text(bombline, (VIRTW*2 - text_width(bombline))/2, y + 5*FONTH, 255, 255, 255);
             }
         }
+    }
+
+    // CS-Style Round MVP banner
+    draw_mvp_banner(VIRTW, (bombinfo.state == BOMB_END) ? 570 : 220);
+
+    // CS-Style Freeze-time countdown banner & Quick Loadout Selector UX
+    if(is_freezetime() && !intermission)
+    {
+        int sec = max(1, (freezetime_end - lastmillis + 999) / 1000);
+        defformatstring(fztext)("\f3[ FREEZE TIME: %d SECONDS ]", sec);
+        int fzw = text_width(fztext);
+        draw_text(fztext, (VIRTW*2 - fzw)/2, VIRTH*2 - 240, 255, 200, 40);
+
+        const char *curgun = (player1->primary >= 0 && player1->primary < NUMGUNS) ? gunnames[player1->primary] : "Assault Rifle";
+        defformatstring(curloadout)("\f2Equipped: \f1%s", curgun);
+        draw_text(curloadout, (VIRTW*2 - text_width(curloadout))/2, VIRTH*2 - 200, 200, 255, 200);
+
+        const char *fzsub = "\f7Quick Select: \f1[1] \f7Rifle  \f1[2] \f7Sniper  \f1[3] \f7SMG  \f1[4] \f7Shotgun  \f1[5] \f7Carbine  |  \f1[B] \f7Menu";
+        draw_text(fzsub, (VIRTW*2 - text_width(fzsub))/2, VIRTH*2 - 160, 240, 240, 240);
     }
 
     if(hidevote < 2 && multiplayer(NULL))
@@ -1340,8 +1862,8 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         int virtposy = (VIRTH*2)/10;
         const char *specttext = "GHOST";
         if(player1->team == TEAM_SPECT) specttext = "GHOST";
-        else if(player1->team == TEAM_CLA_SPECT) specttext = "[CLA]";
-        else if(player1->team == TEAM_RVSF_SPECT) specttext = "[RVSF]";
+        else if(player1->team == TEAM_CLA_SPECT) specttext = "[Terrorists]";
+        else if(player1->team == TEAM_RVSF_SPECT) specttext = "[CT]";
         draw_text(specttext, virtposx, virtposy*7);
 
         extern bool smoverviewflyforbidden();
@@ -1365,7 +1887,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         glLoadIdentity();
         glOrtho(0, VIRTW/2, VIRTH/2, 0, -1, 1);
 
-        if(p->state == CS_ALIVE && !hidehudequipment)
+        if(p->state == CS_ALIVE)
         {
             if(p == player1 && !intermission && can_buy(p))
             {
@@ -1373,9 +1895,20 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
                 defformatstring(buyinfo)("\f0[BUY ZONE: Press B (%ds)]", secs_left);
                 draw_text(buyinfo, 48, 760);
             }
+            int badge_x = 48;
+            if(p->has_defuse_kit && team_base(p->team) == 1)
+            {
+                draw_text("\f0[KIT]", badge_x, 790);
+                badge_x += 65;
+            }
+            if(p->armour > 0)
+            {
+                if(p->has_helmet) draw_text("\f0[HELMET]", badge_x, 790);
+                else draw_text("\f4[KEVLAR]", badge_x, 790);
+            }
             pushfont("huddigits");
             draw_textf("%d", HUDPOS_HEALTH + HUDPOS_NUMBERSPACING, 823, p->health);
-            if(p->armour) draw_textf("%d", HUDPOS_ARMOUR + HUDPOS_NUMBERSPACING, 823, p->armour);
+            draw_textf("%d", HUDPOS_ARMOUR + HUDPOS_NUMBERSPACING, 823, p->armour);
             if(p->weaponsel && valid_weapon(p->weaponsel->type))
             {
                 glMatrixMode(GL_MODELVIEW);
@@ -1401,12 +1934,17 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             if(!offs || scores[2] || scores[3]) loopi(2) // flag state or frag-counter
             {
                 bool inbase = flaginfos[i].state == CTFF_INBASE || offs;
-                drawctficon(i*120+VIRTW/4.0f*3.0f, 1650, 120, i + (inbase || flagscorehudtransparency == 2 ? 0 : 2), offs / 2, 1/4.0f, inbase || !flagscorehudtransparency ? 255 : 100);
+                int icon_sz = 110;
+                int base_x = VIRTW - 245;
+                int icon_x = base_x + i * (icon_sz + 10);
+                int icon_y = VIRTH - 145;
+                int text_y = icon_y - 45;
+                drawctficon(icon_x, icon_y, icon_sz, i + (inbase || flagscorehudtransparency == 2 ? 0 : 2), offs / 2, 1/4.0f, inbase || !flagscorehudtransparency ? 255 : 100);
                 if(m_teammode)
                 {
                     defformatstring(count)("\f%c%d", cc[i], scores[i + offs]);
                     int countwidth = text_width(count);
-                    draw_text(count, i * 120 + VIRTW / 4.0f * 3.0f + (countwidth > 114 ? (i ? 3 : (120 - countwidth - 3)) : (60 - countwidth / 2)), 1590);
+                    draw_text(count, icon_x + (icon_sz - countwidth) / 2, text_y);
                 }
             }
             if(!offs)
@@ -1482,6 +2020,30 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     {
         glEnable(GL_BLEND);
         rendercommand(HUDPOS_X_BOTTOMLEFT, HUDPOS_Y_BOTTOMLEFT, VIRTW - FONTH);
+    }
+
+    // Flashbang blindness screen overlay
+    if(p == player1 && p->flashendmillis > lastmillis)
+    {
+        float total = (float)(p->flashendmillis - p->flashstartmillis);
+        float remain = (float)(p->flashendmillis - lastmillis);
+        float alpha = clamp(remain / (total * 0.7f), 0.0f, 1.0f);
+        if(alpha > 0.01f)
+        {
+            glEnable(GL_BLEND);
+            glDisable(GL_TEXTURE_2D);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(0, VIRTW, VIRTH, 0, -1, 1);
+            glBegin(GL_QUADS);
+            glVertex2f(0, 0);
+            glVertex2f(VIRTW, 0);
+            glVertex2f(VIRTW, VIRTH);
+            glVertex2f(0, VIRTH);
+            glEnd();
+        }
     }
 
     glDisable(GL_BLEND);

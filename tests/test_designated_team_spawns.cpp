@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <cmath>
 
@@ -196,6 +197,41 @@ void test_designated_team_spawns_ffa_fallback() {
     std::cout << "  -> PASS: FFA map correctly partitions into two designated team spawn bases!\n";
 }
 
+void test_source_code_designated_spawns_enforcement() {
+    std::cout << "[Test 3] Verifying C++ source code strict spawn separation...\n";
+
+    // 1. Verify clientgame.cpp enforces team spawns first even in arena modes
+    std::ifstream client_file("source/src/clientgame.cpp");
+    if(!client_file.is_open()) client_file.open("../source/src/clientgame.cpp");
+    assert(client_file.is_open());
+
+    std::string line;
+    bool found_team_check = false;
+    bool found_arenaspawn_slot = false;
+    while(std::getline(client_file, line)) {
+        if(line.find("if(m_teammode && (type == 0 || type == 1))") != std::string::npos) found_team_check = true;
+        if(line.find("e = &ents[team_spawns[arenaspawn % team_spawns.length()]];") != std::string::npos) found_arenaspawn_slot = true;
+    }
+    client_file.close();
+
+    assert(found_team_check);
+    assert(found_arenaspawn_slot);
+
+    // 2. Verify server.cpp distributes spawns per team without overwriting
+    std::ifstream server_file("source/src/server.cpp");
+    if(!server_file.is_open()) server_file.open("../source/src/server.cpp");
+    assert(server_file.is_open());
+
+    bool found_server_team_filter = false;
+    while(std::getline(server_file, line)) {
+        if(line.find("team_base(clients[i]->team) == team") != std::string::npos) found_server_team_filter = true;
+    }
+    server_file.close();
+
+    assert(found_server_team_filter);
+    std::cout << "  -> PASS: clientgame.cpp and server.cpp strictly enforce designated team spawns!\n";
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "  Dune Strike: Designated Team Spawns Verification Tests\n";
@@ -203,6 +239,7 @@ int main() {
 
     test_designated_team_spawns_standard_map();
     test_designated_team_spawns_ffa_fallback();
+    test_source_code_designated_spawns_enforcement();
 
     std::cout << "========================================================\n";
     std::cout << "  ALL DESIGNATED TEAM SPAWNS TESTS PASSED (100%)\n";

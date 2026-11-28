@@ -175,6 +175,12 @@ SVARFF(curname, { curname = exchangestr(curname, player1->name); }, {} );
 
 int teamatoi(const char *name)
 {
+    if(!name || !*name) return -1;
+    if(!strcasecmp(name, "ct") || !strcasecmp(name, "counter-terrorists") || !strcasecmp(name, "counter-terrorist") || !strcasecmp(name, "rvsf") || !strcmp(name, "1")) return TEAM_RVSF;
+    if(!strcasecmp(name, "t") || !strcasecmp(name, "terrorists") || !strcasecmp(name, "terrorist") || !strcasecmp(name, "cla") || !strcmp(name, "0")) return TEAM_CLA;
+    if(!strcasecmp(name, "ct-spect") || !strcasecmp(name, "rvsf-spect") || !strcasecmp(name, "ctspc") || !strcmp(name, "3")) return TEAM_RVSF_SPECT;
+    if(!strcasecmp(name, "t-spect") || !strcasecmp(name, "terrorists-spect") || !strcasecmp(name, "cla-spect") || !strcasecmp(name, "tspc") || !strcmp(name, "2")) return TEAM_CLA_SPECT;
+    if(!strcasecmp(name, "spectator") || !strcasecmp(name, "spect") || !strcmp(name, "4")) return TEAM_SPECT;
     return getlistindex(name, teamnames, true, -1);
 }
 
@@ -683,7 +689,7 @@ static void bombcheck()
             if(bombinfo.sites[i].x >= 0)
             {
                 float dx = player1->o.x - bombinfo.sites[i].x, dy = player1->o.y - bombinfo.sites[i].y;
-                if(dx*dx + dy*dy <= 9.0f) // matches the server's default bomb_siteradius
+                if(dx*dx + dy*dy <= 16.0f) // matches the server's competitive bomb_siteradius (4.0 units)
                 {
                     atsite = i;
                     break;
@@ -698,7 +704,10 @@ static void bombcheck()
         lastatsite = -1;
     }
 
-    // Dynamic CS C4 audio: progressive beep tempo as detonation approaches
+    // Dynamic CS C4 audio: progressive beep tempo and pitch escalation as detonation approaches
+    static bool played_10s_warning = false;
+    static int lastheartbeatmillis = 0;
+
     if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
     {
         int elapsed = lastmillis - bombinfo.updatetime;
@@ -706,23 +715,67 @@ static void bombcheck()
 
         if(remaining > 0)
         {
-            int beep_interval = 1000; // default 1.0s (30-40s left)
-            if(remaining <= 2000) beep_interval = 125;        // Final 2s: urgent panic beeping (8 beeps/sec)
-            else if(remaining <= 5000) beep_interval = 250;   // 2-5s left: very fast (4 beeps/sec)
-            else if(remaining <= 10000) beep_interval = 350;  // 5-10s left: fast (under defuse wire)
-            else if(remaining <= 20000) beep_interval = 500;  // 10-20s left: moderate (2 beeps/sec)
-            else if(remaining <= 30000) beep_interval = 750;  // 20-30s left: quickening
+            // Critical 10-second warning cue (defusal threshold without kit)
+            if(remaining <= 10000 && !played_10s_warning)
+            {
+                hudoutf("\f3[CRITICAL] 10 SECONDS TO DETONATION!");
+                audiomgr.playsound(S_RADIO_FIREINTHEHOLE, SP_HIGHEST);
+                played_10s_warning = true;
+            }
+
+            int beep_interval = 1000; // default 1.0s (>30s left)
+            float pitch_multiplier = 1.0f;
+
+            if(remaining <= 1500)
+            {
+                beep_interval = 70; // Final 1.5s: panic climax (14 beeps/sec)
+                pitch_multiplier = 1.55f;
+            }
+            else if(remaining <= 4000)
+            {
+                beep_interval = 130; // 1.5-4s left: ultra-rapid double beeps (~7.7 beeps/sec)
+                pitch_multiplier = 1.40f;
+            }
+            else if(remaining <= 10000)
+            {
+                beep_interval = 220; // 4-10s left: high-urgency rapid tempo (~4.5 beeps/sec)
+                pitch_multiplier = 1.25f;
+            }
+            else if(remaining <= 20000)
+            {
+                beep_interval = 480; // 10-20s left: moderate tempo (~2.1 beeps/sec)
+                pitch_multiplier = 1.08f;
+            }
+            else if(remaining <= 30000)
+            {
+                beep_interval = 750; // 20-30s left: quickening (~1.3 beeps/sec)
+                pitch_multiplier = 1.02f;
+            }
 
             if(lastmillis - lastbeepmillis >= beep_interval)
             {
-                audiomgr.playsound(S_C4_BEEP, &bombinfo.pos, SP_HIGH);
+                location *loc = audiomgr._playsound(S_C4_BEEP, staticreference(bombinfo.pos), SP_HIGH);
+                if(loc && pitch_multiplier > 1.0f) loc->pitch(pitch_multiplier);
                 lastbeepmillis = lastmillis;
+            }
+
+            // Tactical heartbeat pulse for high tension in final 10s if nearby or defusing
+            if(remaining <= 10000 && (player1->o.dist(bombinfo.pos) < 25.0f || bombinfo.state == BOMB_DEFUSING))
+            {
+                int hb_interval = (remaining <= 4000) ? 380 : 650;
+                if(lastmillis - lastheartbeatmillis >= hb_interval)
+                {
+                    audiomgr.playsound(S_HEARTBEAT, SP_NORMAL);
+                    lastheartbeatmillis = lastmillis;
+                }
             }
         }
     }
     else
     {
         lastbeepmillis = 0;
+        played_10s_warning = false;
+        lastheartbeatmillis = 0;
     }
 }
 
@@ -754,9 +807,10 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
     gets2c();
     showrespawntimer();
     bombcheck();
+    check_freezetime();
 
     // Added by Rick: let bots think
-    if(m_botmode) BotManager.Think();
+    if(m_botmode || m_bomb) BotManager.Think();
 
     movelocalplayer();
     c2sinfo(player1);   // do this last, to reduce the effective frame lag
@@ -887,6 +941,8 @@ bool can_buy(playerent *d)
 {
     if(!d || d->state != CS_ALIVE) return false;
     if(editmode) return true;
+    // During freeze time, buying is always permitted in the buyzone
+    if(is_freezetime()) return in_buy_zone(d);
     // 10-second buy time limit after spawn / round start
     if(lastmillis - d->lastspawn > 10000) return false;
     // Must be in designated team buy zone
@@ -899,71 +955,57 @@ void findplayerstart(playerent *d, bool mapcenter, int arenaspawn)
     entity *e = NULL;
     if(!mapcenter)
     {
-        int type = m_teammode ? team_base(d->team) : 100;
-        if(m_arena && arenaspawn >= 0)
+        int type = team_base(d->team);
+        if(!team_isactive(d->team)) type = (d == player1) ? 0 : 1;
+        if(m_teammode && (type == 0 || type == 1)) {} // CS designated team spawn verification
+
+        // Strict CS-style Team Spawns:
+        // All members of Terrorists (CLA: type 0) and Counter-Terrorists (RVSF: type 1)
+        // spawn strictly and exclusively at their designated team base.
+        vector<int> team_spawns;
+        loopv(ents)
         {
-            int x = -1;
-            loopi(arenaspawn + 1) x = findentity(PLAYERSTART, x+1, type);
-            if(x >= 0) e = &ents[x];
+            if(ents[i].type == PLAYERSTART && ents[i].attr2 == type)
+                team_spawns.add(i);
         }
-        else if(m_teammode && (type == 0 || type == 1))
+        if(team_spawns.length() > 0)
         {
-            // Designated Team Spawns: All members of a team spawn strictly at their designated team base!
-            vector<int> team_spawns;
-            loopv(ents)
+            if(arenaspawn >= 0)
             {
-                if(ents[i].type == PLAYERSTART && ents[i].attr2 == type)
-                    team_spawns.add(i);
+                e = &ents[team_spawns[arenaspawn % team_spawns.length()]];
             }
-            if(team_spawns.length() > 0)
+            else
             {
                 static int team_cycle[2] = { -1, -1 };
                 team_cycle[type] = (team_cycle[type] + 1) % team_spawns.length();
                 e = &ents[team_spawns[team_cycle[type]]];
             }
-            else
-            {
-                // Fallback for maps without team tags: partition by designated team base
-                if(!team_spawn_base_init[0] || !team_spawn_base_init[1]) init_team_spawns();
-                float closest_dist = -1.0f;
-                int closest_spawn = -1;
-                loopv(ents)
-                {
-                    if(ents[i].type == PLAYERSTART)
-                    {
-                        vec spos(ents[i].x, ents[i].y, ents[i].z);
-                        float d_team = spos.dist(team_spawn_base[type]);
-                        float d_enemy = spos.dist(team_spawn_base[1 - type]);
-                        if(d_team <= d_enemy)
-                        {
-                            if(closest_spawn < 0 || d_team < closest_dist)
-                            {
-                                closest_dist = d_team;
-                                closest_spawn = i;
-                            }
-                        }
-                    }
-                }
-                if(closest_spawn >= 0) e = &ents[closest_spawn];
-            }
-        }
-        else if((m_teammode || m_arena) && !m_ktf) // ktf uses ffa spawns
-        {
-            int r = fixspawn-->0 ? 4 : rnd(10)+1;
-            loopi(r) spawncycle = findentity(PLAYERSTART, spawncycle+1, type);
-            if(spawncycle >= 0) e = &ents[spawncycle];
         }
         else
         {
-            int r = fixspawn-->0 ? 4 : rnd(10)+1;
-            float bestdist = -1;
-
-            loopi(r)
+            // Fallback for maps without team tags: partition by designated team base
+            if(!team_spawn_base_init[0] || !team_spawn_base_init[1]) init_team_spawns();
+            vector<int> partitioned_spawns;
+            loopv(ents)
             {
-                spawncycle = clentstats.hasffaspawns ? findentity(PLAYERSTART, spawncycle+1, 100) : findentity(PLAYERSTART, spawncycle+1); // if not enough ffa-spawns are available, use all
-                if(spawncycle < 0) continue;
-                float dist = nearestenemy(vec(ents[spawncycle].x, ents[spawncycle].y, ents[spawncycle].z), d->team);
-                if(!e || dist < 0 || (bestdist >= 0 && dist > bestdist)) { e = &ents[spawncycle]; bestdist = dist; }
+                if(ents[i].type == PLAYERSTART)
+                {
+                    vec spos(ents[i].x, ents[i].y, ents[i].z);
+                    float d_team = spos.dist(team_spawn_base[type]);
+                    float d_enemy = spos.dist(team_spawn_base[1 - type]);
+                    if(d_team <= d_enemy)
+                        partitioned_spawns.add(i);
+                }
+            }
+            if(partitioned_spawns.length() > 0)
+            {
+                int idx = (arenaspawn >= 0) ? (arenaspawn % partitioned_spawns.length()) : rnd(partitioned_spawns.length());
+                e = &ents[partitioned_spawns[idx]];
+            }
+            else
+            {
+                int s = findentity(PLAYERSTART, 0);
+                if(s >= 0) e = &ents[s];
             }
         }
     }
@@ -1025,6 +1067,128 @@ void bombcarrierchanged(int oldcarrier)
         hudoutf("\f1The bomb has been dropped!");
 }
 
+VARP(freezetime, 0, 5, 15);
+int freezetime_end = 0;
+static bool was_freezetime = false;
+
+bool is_freezetime()
+{
+    return freezetime_end > lastmillis;
+}
+COMMANDF(is_freezetime, "", () { intret(is_freezetime() ? 1 : 0); });
+
+void check_freezetime()
+{
+    if(is_freezetime())
+    {
+        was_freezetime = true;
+    }
+    else if(was_freezetime)
+    {
+        was_freezetime = false;
+        conoutf("\f2========================================");
+        conoutf("\f2>>> ROUND START - GO, GO, GO! <<<");
+        conoutf("\f2========================================");
+        audiomgr.playsound(S_GOGETEMBOYS, SP_HIGHEST);
+        audiomgr.playsound(S_ONTHEMOVE1, SP_HIGH);
+    }
+}
+
+roundmvpdata current_mvp = { "", "", -1, -1, 0, 0 };
+int round_planter = -1;
+int round_defuser = -1;
+
+void reset_round_stats()
+{
+    round_planter = -1;
+    round_defuser = -1;
+    if(player1) player1->round_kills = 0;
+    loopv(players) if(players[i]) players[i]->round_kills = 0;
+    if(freezetime > 0)
+    {
+        freezetime_end = lastmillis + freezetime * 1000;
+        was_freezetime = true;
+    }
+}
+
+void calculate_round_mvp(int winning_team)
+{
+    playerent *mvp = NULL;
+    string reason = "";
+
+    if(m_bomb && bombinfo.reason == BOMB_REASON_DEFUSED && round_defuser >= 0)
+    {
+        mvp = getclient(round_defuser);
+        copystring(reason, "for defusing the bomb");
+    }
+    else if(m_bomb && bombinfo.reason == BOMB_REASON_EXPLODED && round_planter >= 0)
+    {
+        mvp = getclient(round_planter);
+        copystring(reason, "for planting the bomb");
+    }
+    else
+    {
+        int max_k = 0;
+        if(player1 && team_base(player1->team) == winning_team)
+        {
+            if(player1->round_kills > max_k)
+            {
+                max_k = player1->round_kills;
+                mvp = player1;
+            }
+        }
+        loopv(players)
+        {
+            playerent *pl = players[i];
+            if(!pl || team_base(pl->team) != winning_team) continue;
+            if(pl->round_kills > max_k)
+            {
+                max_k = pl->round_kills;
+                mvp = pl;
+            }
+        }
+        if(mvp && max_k >= 2)
+        {
+            formatstring(reason)("for eliminating %d enemies", max_k);
+        }
+        else if(mvp && max_k == 1)
+        {
+            copystring(reason, "for securing the decisive kill");
+        }
+        else
+        {
+            if(!mvp)
+            {
+                if(player1 && player1->state == CS_ALIVE && team_base(player1->team) == winning_team)
+                    mvp = player1;
+                else
+                {
+                    loopv(players) if(players[i] && players[i]->state == CS_ALIVE && team_base(players[i]->team) == winning_team)
+                    {
+                        mvp = players[i];
+                        break;
+                    }
+                }
+            }
+            if(mvp) copystring(reason, "for surviving and securing the objective");
+        }
+    }
+
+    if(mvp)
+    {
+        mvp->mvps++;
+        copystring(current_mvp.name, colorname(mvp));
+        copystring(current_mvp.reason, reason);
+        current_mvp.clientnum = mvp->clientnum;
+        current_mvp.team = mvp->team;
+        current_mvp.displayuntil = lastmillis + 7000;
+        conoutf("\f0========================================");
+        conoutf("\f0★ ROUND MVP: \f1%s \f0(%s)!", current_mvp.name, current_mvp.reason);
+        conoutf("\f0========================================");
+        audiomgr.playsound(S_AWESOME1, SP_HIGHEST);
+    }
+}
+
 void bombinfochanged(int oldstate)
 {
     if(!m_bomb) return;
@@ -1032,7 +1196,10 @@ void bombinfochanged(int oldstate)
     {
         case BOMB_LIVE:
             if(oldstate == BOMB_WAIT || oldstate == BOMB_END)
+            {
+                reset_round_stats();
                 hudoutf("\f3Round %d - \f1%s attack, %s defend", bombinfo.round, team_basestring(bombinfo.attackerteam), team_basestring(team_opposite(bombinfo.attackerteam)));
+            }
             break;
         case BOMB_PLANTING:
             if(bombinfo.actionactor == player1->clientnum)
@@ -1046,17 +1213,19 @@ void bombinfochanged(int oldstate)
         case BOMB_PLANTED:
             if(oldstate == BOMB_PLANTING || oldstate == BOMB_WAIT)
             {
+                round_planter = bombinfo.actionactor;
                 if(bombinfo.site >= 0 && bombinfo.site < 2)
                     hudoutf("\f1The bomb has been planted at Site %c!", bombinfo.site == 0 ? 'A' : 'B');
                 else
                     hudoutf("\f1The bomb has been planted!");
-                audiomgr.playsound(S_FA_BOMBPLANTED, SP_HIGHEST);
+                audiomgr.playsound(S_RADIO_BOMBPLANTED, SP_HIGHEST);
                 audiomgr.playsound(S_C4_PLANT, &bombinfo.pos, SP_HIGH);
             }
             break;
         case BOMB_DEFUSING:
             if(oldstate != BOMB_DEFUSING)
             {
+                round_defuser = bombinfo.actionactor;
                 hudoutf(bombinfo.actionactor == player1->clientnum ? "\f3Defusing the bomb..." : "\f1The bomb is being defused!");
                 audiomgr.playsound(S_FA_DEFUSING, SP_HIGHEST);
                 audiomgr.playsound(S_C4_DISARM, &bombinfo.pos, SP_HIGH);
@@ -1064,6 +1233,10 @@ void bombinfochanged(int oldstate)
             break;
         case BOMB_END:
             if(oldstate == BOMB_END) break;
+            int win_team = bombinfo.result == BOMB_RESULT_ATTACKERS ? bombinfo.attackerteam : team_opposite(bombinfo.attackerteam);
+            calculate_round_mvp(win_team);
+            if(team_base(win_team) == TEAM_CLA) audiomgr.playsound(S_RADIO_TERWIN, SP_HIGHEST);
+            else audiomgr.playsound(S_RADIO_CTWIN, SP_HIGHEST);
             if(bombinfo.reason == BOMB_REASON_EXPLODED)
             {
                 particle_splash(PART_FIREBALL, 40, 1200, bombinfo.pos);
@@ -1074,7 +1247,7 @@ void bombinfochanged(int oldstate)
             }
             else if(bombinfo.reason == BOMB_REASON_DEFUSED)
             {
-                audiomgr.playsound(S_FA_DEFUSED, SP_HIGHEST);
+                audiomgr.playsound(S_RADIO_BOMBDEFUSED, SP_HIGHEST);
                 hudoutf("\f3The bomb was defused - defenders win the round");
             }
             else if(bombinfo.reason == BOMB_REASON_TIME)
@@ -1268,7 +1441,12 @@ void dodamage(int damage, playerent *pl, playerent *actor, int gun, bool gib, bo
     {
         if(pl != actor) updatedmgindicator(pl, actor->o);
         damageblend(damage, pl);
-        pl->damageroll(damage);
+        pl->aimpunch(damage, zone);
+    }
+
+    if(zone == HITZONE_HEAD && pl->has_helmet && pl->armour > 0)
+    {
+        audiomgr.playsound(S_ITEMHELMET, pl, SP_HIGH);
     }
 
     if(pl->health<=0) { if(local) dokill(pl, actor, gib, gun >= 0 ? gun : actor->weaponsel->type, zone); }
@@ -1281,6 +1459,14 @@ void dokill(playerent *pl, playerent *act, bool gib, int gun, int zone)
     if(pl->state!=CS_ALIVE || intermission) return;
 
     exechook(HOOK_SP, "onKill", "%d %d %d %d", act->clientnum, pl->clientnum, gun, gib ? 1 : 0);
+
+    bool headshot = (zone == HITZONE_HEAD);
+    bool backstab = (gun == GUN_KNIFE && gib);
+    const char *kname = (pl == act) ? "" : (act ? act->name : "");
+    const char *vname = pl ? pl->name : "";
+    int kteam = act ? act->team : -1;
+    int vteam = pl ? pl->team : -1;
+    addkillfeed(kname, kteam, vname, vteam, gun, headshot, backstab);
 
     const char *pname = pl == player1 ? "you" : colorname(pl);
     const char *aname = act == player1 ? "you" : colorname(act);
@@ -1307,7 +1493,11 @@ void dokill(playerent *pl, playerent *act, bool gib, int gun, int zone)
         if(pl != act) act->tks++;
         if(!m_mp(gamemode)) act->frags--;
     }
-    else if(!m_mp(gamemode)) act->frags += ( gib && gun != GUN_GRENADE && gun != GUN_SHOTGUN) ? 2 : 1;
+    else
+    {
+        act->round_kills++;
+        if(!m_mp(gamemode)) act->frags += ( gib && gun != GUN_GRENADE && gun != GUN_SHOTGUN) ? 2 : 1;
+    }
 
     if(pl!=act && zone == HITZONE_HEAD) audiomgr.playsound(S_HEADSHOT, SP_LOW);
     if(gib) addgib(pl);
@@ -1503,7 +1693,7 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     if(norespawn) return;
 
     sendmapidenttoserver = true;
-    if(m_botmode) BotManager.BeginMap(name);
+    if(m_botmode || m_bomb) BotManager.BeginMap(name);
     else kickallbots();
     showmipstats = false;
     clearbounceents();
@@ -1835,7 +2025,7 @@ void scallvote(int *type, const char *arg1, const char *arg2)
             case SA_FORCETEAM:
             {
                 int team = atoi(arg2);
-                if(team < 0) arg2 = (team == 0) ? "RVSF" : "CLA";
+                if(team < 0) arg2 = (team == 0) ? "CT" : "Terrorists";
                 // fall through
             }
             default:
@@ -2264,13 +2454,18 @@ static void hitzoneselftestfn()
     // armor_absorb = 60 - 42 = 18.
     // armor_dmg = ceil(18 * 0.5) = 9.
     playerstate ps;
-    ps.health = 100; ps.armour = 100;
+    ps.health = 100; ps.armour = 100; ps.has_helmet = true;
     int dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
     if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL head armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
-    ps.health = 100; ps.armour = 100;
+    // Unarmored headshot without helmet takes full 60 damage directly to health:
+    playerstate ps_no_helm;
+    ps_no_helm.health = 100; ps_no_helm.armour = 100; ps_no_helm.has_helmet = false;
+    int dmg_no_helm = ps_no_helm.dodamage(60, GUN_CARBINE, HITZONE_HEAD);
+    if(dmg_no_helm != 60 || ps_no_helm.health != 40 || ps_no_helm.armour != 100) { failures++; conoutf("hitzone FAIL head no-helmet: dmg %d", dmg_no_helm); }
+    ps.health = 100; ps.armour = 100; ps.has_helmet = true;
     dmg = ps.dodamage(60, GUN_CARBINE, HITZONE_TORSO);
     if(dmg != 42 || ps.health != 58 || ps.armour != 91) { failures++; conoutf("hitzone FAIL torso armour: dmg %d health %d armour %d", dmg, ps.health, ps.armour); }
-    ps.health = 100; ps.armour = 100;
+    ps.health = 100; ps.armour = 100; ps.has_helmet = true;
     dmg = ps.dodamage(INT_MAX, GUN_KNIFE, HITZONE_TORSO);
     if(dmg != 100 || ps.health != 0 || ps.armour != 0) { failures++; conoutf("hitzone FAIL suicide"); }
 
