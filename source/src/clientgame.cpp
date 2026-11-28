@@ -698,7 +698,10 @@ static void bombcheck()
         lastatsite = -1;
     }
 
-    // Dynamic CS C4 audio: progressive beep tempo as detonation approaches
+    // Dynamic CS C4 audio: progressive beep tempo and pitch escalation as detonation approaches
+    static bool played_10s_warning = false;
+    static int lastheartbeatmillis = 0;
+
     if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
     {
         int elapsed = lastmillis - bombinfo.updatetime;
@@ -706,23 +709,67 @@ static void bombcheck()
 
         if(remaining > 0)
         {
-            int beep_interval = 1000; // default 1.0s (30-40s left)
-            if(remaining <= 2000) beep_interval = 125;        // Final 2s: urgent panic beeping (8 beeps/sec)
-            else if(remaining <= 5000) beep_interval = 250;   // 2-5s left: very fast (4 beeps/sec)
-            else if(remaining <= 10000) beep_interval = 350;  // 5-10s left: fast (under defuse wire)
-            else if(remaining <= 20000) beep_interval = 500;  // 10-20s left: moderate (2 beeps/sec)
-            else if(remaining <= 30000) beep_interval = 750;  // 20-30s left: quickening
+            // Critical 10-second warning cue (defusal threshold without kit)
+            if(remaining <= 10000 && !played_10s_warning)
+            {
+                hudoutf("\f3[CRITICAL] 10 SECONDS TO DETONATION!");
+                audiomgr.playsound(S_RADIO_FIREINTHEHOLE, SP_HIGHEST);
+                played_10s_warning = true;
+            }
+
+            int beep_interval = 1000; // default 1.0s (>30s left)
+            float pitch_multiplier = 1.0f;
+
+            if(remaining <= 1500)
+            {
+                beep_interval = 70; // Final 1.5s: panic climax (14 beeps/sec)
+                pitch_multiplier = 1.55f;
+            }
+            else if(remaining <= 4000)
+            {
+                beep_interval = 130; // 1.5-4s left: ultra-rapid double beeps (~7.7 beeps/sec)
+                pitch_multiplier = 1.40f;
+            }
+            else if(remaining <= 10000)
+            {
+                beep_interval = 220; // 4-10s left: high-urgency rapid tempo (~4.5 beeps/sec)
+                pitch_multiplier = 1.25f;
+            }
+            else if(remaining <= 20000)
+            {
+                beep_interval = 480; // 10-20s left: moderate tempo (~2.1 beeps/sec)
+                pitch_multiplier = 1.08f;
+            }
+            else if(remaining <= 30000)
+            {
+                beep_interval = 750; // 20-30s left: quickening (~1.3 beeps/sec)
+                pitch_multiplier = 1.02f;
+            }
 
             if(lastmillis - lastbeepmillis >= beep_interval)
             {
-                audiomgr.playsound(S_C4_BEEP, &bombinfo.pos, SP_HIGH);
+                location *loc = audiomgr._playsound(S_C4_BEEP, staticreference(bombinfo.pos), SP_HIGH);
+                if(loc && pitch_multiplier > 1.0f) loc->pitch(pitch_multiplier);
                 lastbeepmillis = lastmillis;
+            }
+
+            // Tactical heartbeat pulse for high tension in final 10s if nearby or defusing
+            if(remaining <= 10000 && (player1->o.dist(bombinfo.pos) < 25.0f || bombinfo.state == BOMB_DEFUSING))
+            {
+                int hb_interval = (remaining <= 4000) ? 380 : 650;
+                if(lastmillis - lastheartbeatmillis >= hb_interval)
+                {
+                    audiomgr.playsound(S_HEARTBEAT, SP_NORMAL);
+                    lastheartbeatmillis = lastmillis;
+                }
             }
         }
     }
     else
     {
         lastbeepmillis = 0;
+        played_10s_warning = false;
+        lastheartbeatmillis = 0;
     }
 }
 

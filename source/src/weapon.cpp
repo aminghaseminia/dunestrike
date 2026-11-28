@@ -1825,7 +1825,7 @@ bool grenadeent::applyphysics() { return nadestate==NS_THROWN; }
 
 void grenadeent::oncollision()
 {
-    if(distsincebounce>=1.5f) audiomgr.playsound(rnd(2) ? S_GRENADEBOUNCE1 : S_GRENADEBOUNCE2, &o);
+    if(distsincebounce>=0.6f) audiomgr.playsound(rnd(2) ? S_GRENADEBOUNCE1 : S_GRENADEBOUNCE2, &o);
     distsincebounce = 0.0f;
 }
 
