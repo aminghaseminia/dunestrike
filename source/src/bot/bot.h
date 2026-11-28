@@ -266,6 +266,7 @@ public:
      bool CheckItems(void);
      bool InUnreachableList(entity *e);
      virtual bool DoSPStuff(void) = 0;
+     bool CheckBombTactics(void);
      vec GetEnemyPos(playerent *d);
      bool AStar(void);
      float AStarCost(waypoint_s *pWP1, waypoint_s *pWP2);

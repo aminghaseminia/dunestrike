@@ -955,6 +955,147 @@ void drawmodeinfo()
     draw_text(obj,  x2, y2, 210, 230, 180, 235);
 }
 
+struct killfeed_item
+{
+    string killer;
+    string victim;
+    int kteam;
+    int vteam;
+    int gun;
+    bool headshot;
+    bool backstab;
+    int millis;
+};
+
+#define MAX_KILLFEED 6
+static vector<killfeed_item> killfeed_items;
+
+void addkillfeed(const char *killer, int kteam, const char *victim, int vteam, int gun, bool headshot, bool backstab)
+{
+    killfeed_item k;
+    copystring(k.killer, killer ? killer : "");
+    k.kteam = kteam;
+    copystring(k.victim, victim ? victim : "");
+    k.vteam = vteam;
+    k.gun = gun;
+    k.headshot = headshot;
+    k.backstab = backstab;
+    k.millis = totalmillis;
+    killfeed_items.add(k);
+    if(killfeed_items.length() > MAX_KILLFEED) killfeed_items.remove(0);
+}
+
+void drawkillfeed()
+{
+    if(killfeed_items.empty()) return;
+    static Texture *itemstex = NULL;
+    if(!itemstex) itemstex = textureload("packages/misc/items.png", 3);
+
+    int start_y = 60;
+    int right_margin = VIRTW * 2 - 80;
+    int row_h = 70;
+
+    loopvrev(killfeed_items)
+    {
+        if(totalmillis - killfeed_items[i].millis > 7000)
+            killfeed_items.remove(i);
+    }
+
+    loopv(killfeed_items)
+    {
+        killfeed_item &k = killfeed_items[i];
+        int age = totalmillis - k.millis;
+        if(age > 7000) continue;
+
+        float alpha = 1.0f;
+        if(age > 6000) alpha = 1.0f - (age - 6000) / 1000.0f;
+        int a_ub = clamp((int)(alpha * 255), 0, 255);
+
+        // CLA (Terrorists) = Red (\f3), RVSF (CT) = Blue (\f1)
+        const char *kcol = (k.kteam == TEAM_CLA) ? "\f3" : ((k.kteam == TEAM_RVSF) ? "\f1" : "\f0");
+        const char *vcol = (k.vteam == TEAM_CLA) ? "\f3" : ((k.vteam == TEAM_RVSF) ? "\f1" : "\f0");
+
+        defformatstring(kstr)("%s%s", kcol, k.killer[0] ? k.killer : "world");
+        defformatstring(vstr)("%s%s", vcol, k.victim);
+
+        int kw = text_width(kstr);
+        int vw = text_width(vstr);
+        int iconsize = 65;
+
+        const char *special_str = "";
+        if(k.headshot) special_str = " \f3[HS]";
+        else if(k.backstab) special_str = " \f3[STAB]";
+        int sw = text_width(special_str);
+
+        int total_w = kw + 15 + iconsize + 15 + sw + 10 + vw;
+        int box_x = right_margin - total_w - 20;
+        int box_y = start_y + i * (row_h + 10);
+        int box_w = total_w + 30;
+        int box_h = row_h;
+
+        // Draw translucent dark background box behind killfeed notice
+        glDisable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4ub(15, 15, 18, (uchar)(alpha * 190));
+
+        glBegin(GL_TRIANGLE_STRIP);
+        glVertex2f(box_x, box_y);
+        glVertex2f(box_x + box_w, box_y);
+        glVertex2f(box_x, box_y + box_h);
+        glVertex2f(box_x + box_w, box_y + box_h);
+        glEnd();
+
+        // Border outline
+        glColor4ub(80, 80, 85, (uchar)(alpha * 120));
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(box_x, box_y);
+        glVertex2f(box_x + box_w, box_y);
+        glVertex2f(box_x + box_w, box_y + box_h);
+        glVertex2f(box_x, box_y + box_h);
+        glEnd();
+
+        glEnable(GL_TEXTURE_2D);
+
+        // Draw killer name
+        int cur_x = box_x + 15;
+        int text_y = box_y + (box_h - FONTH) / 2;
+        draw_text(kstr, cur_x, text_y, 255, 255, 255, a_ub);
+        cur_x += kw + 15;
+
+        // Draw weapon graphic icon from items.png
+        if(itemstex && valid_weapon(k.gun))
+        {
+            int c = k.gun != GUN_GRENADE ? k.gun : 3, r = 0;
+            if(c == GUN_AKIMBO) c = GUN_PISTOL;
+            if(c > 3) { c -= 4; r = 1; }
+            if(k.gun == GUN_GRENADE) { c = 3; r = 1; }
+
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glColor4ub(255, 255, 255, a_ub);
+            float icon_y = box_y + (box_h - iconsize) / 2.0f;
+            drawicon(itemstex, cur_x, icon_y, iconsize, c, r, 0.25f);
+        }
+        else
+        {
+            const char *wname = valid_weapon(k.gun) ? guns[k.gun].title : "x";
+            draw_text(wname, cur_x, text_y, 200, 200, 200, a_ub);
+        }
+        cur_x += iconsize + 10;
+
+        // Draw special (Headshot / Backstab)
+        if(special_str[0])
+        {
+            draw_text(special_str, cur_x, text_y, 255, 255, 255, a_ub);
+            cur_x += sw + 10;
+        }
+
+        // Draw victim name
+        draw_text(vstr, cur_x, text_y, 255, 255, 255, a_ub);
+    }
+}
+
 void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwater, int elapsed)
 {
     if(blankouthud > 0) { blankouthud -= elapsed; return; }
@@ -1070,6 +1211,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     glLoadIdentity();
     glOrtho(0, VIRTW*2, VIRTH*2, 0, -1, 1);
     drawmodeinfo();
+    drawkillfeed();
     extern void r_accuracy(int h);
     extern void *scoremenu;
     extern gmenu *curmenu;

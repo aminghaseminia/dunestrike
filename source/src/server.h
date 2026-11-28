@@ -713,6 +713,7 @@ soundcfgitem soundcfg[S_NULL] =
     { "voicecom/ctwin",           "Counter-Terrorists Win",   0, 0,  0, S_RADIO_CTWIN,            C(VOICECOM)|C(OTHER) },
     { "voicecom/terwin",          "Terrorists Win",           0, 0,  0, S_RADIO_TERWIN,           C(VOICECOM)|C(OTHER) },
     { "voicecom/bombplanted",     "Bomb has been planted",    0, 0,  0, S_RADIO_BOMBPLANTED,      C(VOICECOM)|C(OTHER) },
-    { "voicecom/bombdefused",     "Bomb has been defused",    0, 0,  0, S_RADIO_BOMBDEFUSED,      C(VOICECOM)|C(OTHER) }
+    { "voicecom/bombdefused",     "Bomb has been defused",    0, 0,  0, S_RADIO_BOMBDEFUSED,      C(VOICECOM)|C(OTHER) },
+    { "weapon/knife_stab",        "Knife Stab",               0, 0,  0, S_KNIFE_STAB,             C(WEAPON) }
 };
 #undef C

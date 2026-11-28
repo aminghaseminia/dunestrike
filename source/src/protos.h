@@ -617,6 +617,7 @@ extern bombinfo_s bombinfo;
 extern void bombinfochanged(int oldstate);
 extern void bombcarrierchanged(int oldcarrier);
 extern void bombaction();
+extern void addkillfeed(const char *killer, int kteam, const char *victim, int vteam, int gun, bool headshot, bool backstab);
 
 struct roundmvpdata
 {

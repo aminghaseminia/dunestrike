@@ -1053,6 +1053,22 @@ static float getmaterialpenfactor(const vec &p)
     return 1.0f;
 }
 
+static inline bool is_backstab(playerent *attacker, playerent *victim)
+{
+    if(!attacker || !victim) return false;
+    float diff = fmodf(fabsf(attacker->yaw - victim->yaw), 360.0f);
+    if(diff > 180.0f) diff = 360.0f - diff;
+    if(diff > 70.0f) return false;
+
+    vec to_att = vec(attacker->o).sub(victim->o);
+    to_att.z = 0;
+    float rad = victim->yaw * (float)RAD;
+    vec vic_fwd(sinf(rad), -cosf(rad), 0);
+    if(to_att.dot(vic_fwd) > 0.0f) return false;
+
+    return true;
+}
+
 void raydamage(vec &from, vec &to, playerent *d)
 {
     int dam = d->weaponsel->info.damage;
@@ -1140,9 +1156,38 @@ void raydamage(vec &from, vec &to, playerent *d)
     {
         int gun = d->weaponsel->type;
         if(hitzone < HITZONE_TORSO || hitzone >= NUMHITZONES) hitzone = HITZONE_TORSO;
-        dam = (int)(dam * hitzonescale(hitzone) + 0.5f);
-        bool gib = gun == GUN_KNIFE || (gun == GUN_SNIPER && hitzone == HITZONE_HEAD);
-        hitpush(dam, o, d, from, to, gun, gib, hitzone, hitzone);
+        int info = hitzone;
+        bool gib = (gun == GUN_SNIPER && hitzone == HITZONE_HEAD);
+        if(gun == GUN_KNIFE)
+        {
+            knife *k = (knife *)d->weaponsel;
+            bool heavy = k && k->is_heavy;
+            bool back = is_backstab(d, o);
+            if(back)
+            {
+                dam = 250; // Guaranteed instant kill backstab (overcomes 100 HP + 100 Armour)
+                gib = true;
+                info = hitzone | (2 << 4); // knife mode 2 = backstab
+                if(d == player1) conoutf("\f0[BACKSTAB] Instant kill on %s!", colorname(o));
+            }
+            else if(heavy)
+            {
+                dam = 65; // Heavy frontal stab
+                gib = false;
+                info = hitzone | (1 << 4); // knife mode 1 = heavy stab
+            }
+            else
+            {
+                dam = 25; // Quick slash
+                gib = false;
+                info = hitzone | (0 << 4); // knife mode 0 = quick slash
+            }
+        }
+        else
+        {
+            dam = (int)(dam * hitzonescale(hitzone) + 0.5f);
+        }
+        hitpush(dam, o, d, from, to, gun, gib, info, hitzone);
         if(d == player1) hit = true;
         shorten(from, to, distsquared);
         hitscount++;
@@ -1391,6 +1436,15 @@ void weapon::attackphysics(vec &from, vec &to) // physical fx to the owner
 
 VARP(righthanded, 0, 1, 1); // flowtron 20090727
 
+int inspectmillis = 0;
+void inspectweapon()
+{
+    if(!player1 || player1->state != CS_ALIVE) return;
+    if(player1->weaponsel && player1->weaponsel->reloading) return;
+    inspectmillis = lastmillis;
+}
+COMMAND(inspectweapon, "");
+
 void weapon::renderhudmodel(int lastaction, int index)
 {
     playerent *p = owner;
@@ -1402,7 +1456,28 @@ void weapon::renderhudmodel(int lastaction, int index)
     if(!intermission || !ispaused) wm.calcmove(unitv, lastaction, p);
     defformatstring(path)("weapons/%s", info.modelname);
     bool emit = (wm.anim&ANIM_INDEX)==ANIM_GUN_SHOOT && (lastmillis - lastaction) < flashtime();
-    rendermodel(path, wm.anim|ANIM_DYNALLOC|(righthanded==index ? ANIM_MIRROR : 0)|(emit ? ANIM_PARTICLE : 0), 0, -1, wm.pos, 0, p->yaw+90, p->pitch+wm.k_rot, 40.0f, wm.basetime, NULL, NULL, 1.28f);
+
+    float roll_inspect = 0.0f, yaw_inspect = 0.0f, pitch_inspect = 0.0f;
+    vec rend_pos = wm.pos;
+    if(p == player1 && inspectmillis > 0)
+    {
+        int elapsed = lastmillis - inspectmillis;
+        if(elapsed < 2400 && !reloading && !p->attacking)
+        {
+            float t = elapsed / 2400.0f;
+            float sway = sinf(t * (float)M_PI);
+            roll_inspect = sway * (righthanded ? 24.0f : -24.0f);
+            yaw_inspect = sway * 15.0f;
+            pitch_inspect = -sway * 10.0f;
+            rend_pos.z -= sway * 0.12f;
+        }
+        else
+        {
+            inspectmillis = 0;
+        }
+    }
+
+    rendermodel(path, wm.anim|ANIM_DYNALLOC|(righthanded==index ? ANIM_MIRROR : 0)|(emit ? ANIM_PARTICLE : 0), 0, -1, rend_pos, roll_inspect, p->yaw+90+yaw_inspect, p->pitch+wm.k_rot+pitch_inspect, 40.0f, wm.basetime, NULL, NULL, 1.28f);
 }
 
 void weapon::updatetimers(int millis)
@@ -1412,6 +1487,7 @@ void weapon::updatetimers(int millis)
 
 void weapon::onselecting(bool sound)
 {
+    if(owner == player1) inspectmillis = 0;
     updatelastaction(owner);
     bool local = (owner == player1);
     if(sound) audiomgr.playsound(S_GUNCHANGE, owner, local ? SP_HIGH : SP_NORMAL);
@@ -2193,17 +2269,25 @@ bool akimbo::timerout() { return akimbomillis && akimbomillis <= lastmillis; }
 
 // knife
 
-knife::knife(playerent *owner) : weapon(owner, GUN_KNIFE) {}
+knife::knife(playerent *owner) : weapon(owner, GUN_KNIFE), is_heavy(false) {}
 
 int knife::flashtime() const { return 0; }
+
+void knife::trigger_heavy()
+{
+    is_heavy = true;
+    owner->attacking = true;
+    extern vec worldpos;
+    attack(worldpos);
+}
 
 bool knife::attack(vec &targ)
 {
     int attackmillis = lastmillis-owner->lastaction - gunwait;
-    if(attackmillis<0) return false;
+    if(attackmillis<0) { is_heavy = false; return false; }
     gunwait = reloading = 0;
 
-    if(!owner->attacking) return false;
+    if(!owner->attacking) { is_heavy = false; return false; }
 
     attackmillis = lastmillis - min(attackmillis, curtime);
     updatelastaction(owner, attackmillis);
@@ -2218,7 +2302,7 @@ bool knife::attack(vec &targ)
     vec unitv;
     float dist = to.dist(from, unitv);
     unitv.div(dist);
-    unitv.mul(4.2f); // CS knife slash range
+    unitv.mul(is_heavy ? 4.0f : 4.2f); // CS knife range
     to = from;
     to.add(unitv);
     intersectgeometry(from,to);
@@ -2230,7 +2314,8 @@ bool knife::attack(vec &targ)
     raydamage(from, to, owner);
     attackfx(from, to, 0);
     sendshoot(from, to, attackmillis);
-    gunwait = info.attackdelay;
+    gunwait = is_heavy ? 1000 : info.attackdelay; // 1000ms heavy stab, 450ms quick slash
+    is_heavy = false;
 
     return true;
 }
@@ -2238,7 +2323,11 @@ bool knife::attack(vec &targ)
 int knife::modelanim() { return modelattacking() ? ANIM_GUN_SHOOT : ANIM_GUN_IDLE; }
 
 void knife::drawstats() {}
-void knife::attackfx(const vec &from, const vec &to, int millis) { attacksound(); }
+void knife::attackfx(const vec &from, const vec &to, int millis)
+{
+    if(is_heavy) audiomgr.playsound(S_KNIFE_STAB, owner);
+    else attacksound();
+}
 void knife::renderstats() { }
 
 
@@ -2263,6 +2352,17 @@ COMMAND(togglescope, "");
 void do_altaction(bool on)
 {
     if(!player1 || player1->state != CS_ALIVE) return;
+
+    // 0. Right-click when holding knife: Heavy Stab
+    if(player1->weaponsel && player1->weaponsel->type == GUN_KNIFE)
+    {
+        if(on)
+        {
+            knife *k = (knife *)player1->weaponsel;
+            k->trigger_heavy();
+        }
+        return;
+    }
 
     // 1. Right-click ALWAYS toggles scope when holding sniper rifle
     if(player1->weaponsel && player1->weaponsel->type == GUN_SNIPER)

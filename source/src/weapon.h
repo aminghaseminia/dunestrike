@@ -176,9 +176,11 @@ struct akimbo : gun
 
 struct knife : weapon
 {
+    bool is_heavy;
     knife(playerent *owner);
 
     bool attack(vec &targ);
+    void trigger_heavy();
     int modelanim();
 
     void drawstats();

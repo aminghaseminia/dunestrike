@@ -89,12 +89,21 @@ void processevent(client *c, shotevent &e)
                     if (!sg_engine(target, c, numhits_c, numhits_m, numhits_o, bonusdist)) continue;
 #endif
                 }
+                else if(e.gun == GUN_KNIFE)
+                {
+                    zone = h.info & 0x0F;
+                    if(zone < HITZONE_TORSO || zone >= NUMHITZONES) zone = HITZONE_TORSO;
+                    int ktype = (h.info >> 4) & 0x0F;
+                    if(ktype == 2) { damage = 250; gib = true; } // Backstab instant kill
+                    else if(ktype == 1) { damage = 65; gib = false; } // Heavy frontal stab
+                    else { damage = 25; gib = false; } // Quick slash
+                }
                 else
                 {
                     zone = h.info;
                     if(zone < HITZONE_TORSO || zone >= NUMHITZONES) zone = HITZONE_TORSO;
                     damage = rays*guns[e.gun].damage;
-                    gib = e.gun == GUN_KNIFE || (e.gun == GUN_SNIPER && zone == HITZONE_HEAD);
+                    gib = (e.gun == GUN_SNIPER && zone == HITZONE_HEAD);
                     damage = (int)(damage * hitzonescale(zone) + 0.5f);
                 }
                 totalrays += rays;

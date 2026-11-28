@@ -1405,6 +1405,14 @@ void dokill(playerent *pl, playerent *act, bool gib, int gun, int zone)
 
     exechook(HOOK_SP, "onKill", "%d %d %d %d", act->clientnum, pl->clientnum, gun, gib ? 1 : 0);
 
+    bool headshot = (zone == HITZONE_HEAD);
+    bool backstab = (gun == GUN_KNIFE && gib);
+    const char *kname = (pl == act) ? "" : (act ? act->name : "");
+    const char *vname = pl ? pl->name : "";
+    int kteam = act ? act->team : -1;
+    int vteam = pl ? pl->team : -1;
+    addkillfeed(kname, kteam, vname, vteam, gun, headshot, backstab);
+
     const char *pname = pl == player1 ? "you" : colorname(pl);
     const char *aname = act == player1 ? "you" : colorname(act);
     const char *death = killmessage(gun, gib, zone);

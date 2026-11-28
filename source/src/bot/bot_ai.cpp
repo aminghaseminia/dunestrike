@@ -736,6 +736,160 @@ void CBot::CheckScope()
     }
 }
 
+bool CBot::CheckBombTactics()
+{
+    if(!m_bomb || bombinfo.state == BOMB_WAIT || bombinfo.state == BOMB_END) return false;
+    if(bombinfo.sites[0].x < 0 || bombinfo.sites[1].x < 0) return false;
+
+    bool is_attacker = (team_base(m_pMyEnt->team) == bombinfo.attackerteam);
+
+    if(bombinfo.state == BOMB_LIVE)
+    {
+        if(is_attacker)
+        {
+            // Terrorist attack tactics
+            bool is_carrier = (bombinfo.carrier == m_pMyEnt->clientnum);
+            bool bomb_dropped = (bombinfo.carrier < 0 && bombinfo.dropped && bombinfo.pos.x >= 0);
+
+            // If bomb dropped, recover bomb
+            if(bomb_dropped)
+            {
+                vec bombpos = bombinfo.pos;
+                float d2bomb = Get2DDistance(bombpos);
+                if(d2bomb < 2.5f)
+                {
+                    AimToVec(bombpos);
+                    m_pMyEnt->move = 1;
+                    return true;
+                }
+                node_s *pNode = WaypointClass.GetNearestWaypoint(bombpos, 40.0f);
+                if(pNode) { SetCurrentGoalWaypoint(pNode); HeadToGoal(); return true; }
+            }
+
+            // Strategy target site: alternate based on round
+            int target_site = (bombinfo.round % 2 == 0) ? 0 : 1;
+            vec site_target = bombinfo.sites[target_site];
+            float dist2site = Get2DDistance(site_target);
+
+            if(is_carrier)
+            {
+                // Carrier bot: head to site and plant!
+                if(dist2site <= 3.8f)
+                {
+                    m_pMyEnt->trycrouch = true;
+                    m_pMyEnt->move = 0;
+                    AimToVec(site_target);
+                    bombaction();
+                    return true;
+                }
+                else
+                {
+                    node_s *pSiteNode = WaypointClass.GetNearestWaypoint(site_target, 40.0f);
+                    if(pSiteNode)
+                    {
+                        SetCurrentGoalWaypoint(pSiteNode);
+                        if(HeadToGoal()) return true;
+                    }
+                    AimToVec(site_target);
+                    m_pMyEnt->move = 1;
+                    return true;
+                }
+            }
+            else
+            {
+                // Escort carrier / push bombsite
+                if(dist2site <= 8.0f)
+                {
+                    m_pMyEnt->move = (dist2site > 4.0f) ? 1 : 0;
+                    if(dist2site <= 4.0f) m_pMyEnt->trycrouch = true;
+                    AimToVec(site_target);
+                    return true;
+                }
+                node_s *pSiteNode = WaypointClass.GetNearestWaypoint(site_target, 40.0f);
+                if(pSiteNode)
+                {
+                    SetCurrentGoalWaypoint(pSiteNode);
+                    if(HeadToGoal()) return true;
+                }
+                AimToVec(site_target);
+                m_pMyEnt->move = 1;
+                return true;
+            }
+        }
+        else
+        {
+            // CT setup: guard sites (split 50/50 between Site A and Site B)
+            int my_site = (m_pMyEnt->clientnum % 2 == 0) ? 0 : 1;
+            vec def_target = bombinfo.sites[my_site];
+            float dist2def = Get2DDistance(def_target);
+            if(dist2def <= 7.0f)
+            {
+                m_pMyEnt->move = (dist2def > 4.5f) ? 1 : 0;
+                if(dist2def <= 4.5f) m_pMyEnt->trycrouch = true;
+                return true;
+            }
+            node_s *pDefNode = WaypointClass.GetNearestWaypoint(def_target, 40.0f);
+            if(pDefNode)
+            {
+                SetCurrentGoalWaypoint(pDefNode);
+                if(HeadToGoal()) return true;
+            }
+            AimToVec(def_target);
+            m_pMyEnt->move = 1;
+            return true;
+        }
+    }
+    else if(bombinfo.state == BOMB_PLANTED || bombinfo.state == BOMB_DEFUSING)
+    {
+        vec bombpos = bombinfo.pos;
+        float dist2bomb = Get2DDistance(bombpos);
+
+        if(is_attacker)
+        {
+            // Terrorists defend planted bomb from 4-12 units away
+            if(dist2bomb <= 12.0f && dist2bomb >= 4.0f)
+            {
+                m_pMyEnt->move = 0;
+                m_pMyEnt->trycrouch = true;
+                return true;
+            }
+            node_s *pNode = WaypointClass.GetNearestWaypoint(bombpos, 40.0f);
+            if(pNode)
+            {
+                SetCurrentGoalWaypoint(pNode);
+                if(HeadToGoal()) return true;
+            }
+            AimToVec(bombpos);
+            m_pMyEnt->move = 1;
+            return true;
+        }
+        else
+        {
+            // CT retake and defuse!
+            if(dist2bomb <= 3.5f)
+            {
+                m_pMyEnt->trycrouch = true;
+                m_pMyEnt->move = 0;
+                AimToVec(bombpos);
+                bombaction();
+                return true;
+            }
+            else
+            {
+                node_s *pNode = WaypointClass.GetNearestWaypoint(bombpos, 40.0f);
+                if(pNode)
+                {
+                    SetCurrentGoalWaypoint(pNode);
+                    if(HeadToGoal()) return true;
+                }
+                AimToVec(bombpos);
+                m_pMyEnt->move = 1;
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 void CBot::MainAI()
 {
@@ -801,6 +955,12 @@ void CBot::MainAI()
 
         AddDebugText("SP stuff");
         m_eCurrentBotState = STATE_SP;
+    }
+    else if (CheckBombTactics()) // CS-style bomb mode team tactical strategies
+    {
+        CheckReload();
+        AddDebugText("Bomb tactical strat");
+        m_eCurrentBotState = STATE_NORMAL;
     }
     else // Normal navigation
     {
