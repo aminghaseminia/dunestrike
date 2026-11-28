@@ -757,7 +757,7 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
     check_freezetime();
 
     // Added by Rick: let bots think
-    if(m_botmode) BotManager.Think();
+    if(m_botmode || m_bomb) BotManager.Think();
 
     movelocalplayer();
     c2sinfo(player1);   // do this last, to reduce the effective frame lag
@@ -1639,7 +1639,7 @@ void startmap(const char *name, bool reset, bool norespawn)   // called just aft
     if(norespawn) return;
 
     sendmapidenttoserver = true;
-    if(m_botmode) BotManager.BeginMap(name);
+    if(m_botmode || m_bomb) BotManager.BeginMap(name);
     else kickallbots();
     showmipstats = false;
     clearbounceents();

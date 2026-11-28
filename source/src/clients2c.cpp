@@ -669,7 +669,7 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                     if(curpeer) closemenu(NULL);
                     conoutf("new round starting... fight!");
                     hudeditf(HUDMSG_TIMER, "FIGHT!");
-                    if(m_botmode) BotManager.RespawnBots();
+                    if(m_botmode || m_bomb) BotManager.RespawnBots();
                 }
                 addmsg(SV_SPAWN, "rii", player1->lifesequence, player1->weaponsel->type);
                 player1->weaponswitch(player1->primweap, false);

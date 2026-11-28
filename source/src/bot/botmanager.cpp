@@ -916,7 +916,7 @@ botent *CBotManager::CreateBot(const char *team, const char *skill, const char *
 
 bool botmode()
 {
-    if(m_botmode) return true;
+    if(m_botmode || m_bomb) return true;
     conoutf("the current game mode does not support bots");
     return false;
 }
