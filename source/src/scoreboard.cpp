@@ -271,12 +271,12 @@ void renderteamscore(teamscore *t)
     if(m_bomb)
     {
         int wins = is_t ? bombinfo.wins[0] : bombinfo.wins[1];
-        line.addcol(sc_clientnum, "%s", team_string(t->team));
+        line.addcol(sc_clientnum, "%s", is_t ? "T" : "CT");
         line.addcol(sc_name, "%s (%d alive) - %d WINS", tname, alive_count, wins);
     }
     else
     {
-        line.addcol(sc_clientnum, "%s", team_string(t->team));
+        line.addcol(sc_clientnum, "%s", is_t ? "T" : "CT");
         line.addcol(sc_name, "%s (%d alive / %d total)", tname, alive_count, n);
     }
 

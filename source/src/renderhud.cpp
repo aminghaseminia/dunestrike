@@ -514,6 +514,7 @@ void drawequipicons(playerent *p)
 
     // health & armor
     if(p->armour) drawequipicon(HUDPOS_ARMOUR*2, 1650, (p->armour-1)/25, 2);
+    else drawequipicon(HUDPOS_ARMOUR*2, 1650, 0, 2);
     drawequipicon(HUDPOS_HEALTH*2, 1650, 2, 3);
     if(p->mag[GUN_GRENADE]) drawequipicon(oldfashionedgunstats ? (HUDPOS_GRENADE + (((float)screenw / (float)screenh > 1.5f) ? 75 : 25)) * 2 : HUDPOS_GRENADE*2, 1650, 3, 1);
 
@@ -1013,7 +1014,8 @@ void drawteamicons(int w, int h, bool spect)
     glColor3f(1, 1, 1);
     static Texture *icons = NULL;
     if(!icons) icons = textureload("packages/misc/teamicons.png", 3);
-    if(player1->team < TEAM_SPECT || spect) quad(icons->id, VIRTW-VIRTH/12-10, 10, VIRTH/12, team_base(spect ? players[player1->followplayercn]->team : player1->team) ? 0.5f : 0, 0, 0.49f, 1.0f);
+    float s = 60.0f;
+    if(player1->team < TEAM_SPECT || spect) quad(icons->id, VIRTW - s - 20, 15, s, team_base(spect ? players[player1->followplayercn]->team : player1->team) ? 0.5f : 0, 0, 0.49f, 1.0f);
 }
 
 int damageblendmillis = 0;
@@ -1190,8 +1192,8 @@ void drawkillfeed()
     static Texture *itemstex = NULL;
     if(!itemstex) itemstex = textureload("packages/misc/items.png", 3);
 
-    int start_y = 60;
-    int right_margin = VIRTW * 2 - 80;
+    int start_y = 155; // positioned cleanly below the top-right timer and team badge
+    int right_margin = VIRTW * 2 - 40;
     int row_h = 70;
 
     loopvrev(killfeed_items)
@@ -1500,7 +1502,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // without below condition it was always set in drawdmgindicator()
     if(damageindicatorplayer == p || (is_spect && getclient(player1->followplayercn) == damageindicatorplayer)) drawdmgindicator(p);
 
-    if(p->state==CS_ALIVE && !hidehudequipment) drawequipicons(p);
+    if(p->state==CS_ALIVE) drawequipicons(p);
 
     if(!editmode)
     {
@@ -1529,6 +1531,16 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
     }
     glLoadIdentity();
     glOrtho(0, VIRTW*2, VIRTH*2, 0, -1, 1);
+    if(targetplayer && isteam(targetplayer->team, p->team) && targetplayer->state == CS_ALIVE)
+    {
+        // Display teammate name centered directly beneath the prohibition crosshair
+        defformatstring(mate_str)("%s", colorname(targetplayer));
+        int mw = text_width(mate_str);
+        int mx = VIRTW - mw / 2;
+        int my = VIRTH + 52;
+        draw_text(mate_str, mx + 2, my + 2, 0, 0, 0, 220);
+        draw_text(mate_str, mx, my, 255, 255, 255, 255);
+    }
     drawmodeinfo();
     drawkillfeed();
     extern void r_accuracy(int h);
@@ -1623,7 +1635,11 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             }
         }
         formatstring(gtime)("%02d:%02d", gtmin, gtsec);
-        if(gametimedisplay) draw_text(gtime, (VIRTW-225-10)*2 - (text_width(gtime)/2 + FONTH/2), 20);
+        if(gametimedisplay)
+        {
+            int tw = text_width(gtime);
+            draw_text(gtime, VIRTW*2 - tw - 175, 42);
+        }
     }
 
     if(m_bomb && !intermission)
@@ -1634,7 +1650,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         int htr = bomb_halftime > 0 ? bomb_halftime : (blimit > 1 ? blimit - 1 : 1);
         const char *halfinfo = bombinfo.round <= htr ? "1st Half" : "2nd Half";
         bool matchpoint = (bombinfo.wins[0] == blimit - 1 || bombinfo.wins[1] == blimit - 1);
-        defformatstring(scoreline)("\f3CLA %d  \f7-  \f1%d RVSF   \f3Round %d (%s)%s",
+        defformatstring(scoreline)("\f3T %d  \f7-  \f1%d CT   \f3Round %d (%s)%s",
             bombinfo.wins[0], bombinfo.wins[1], bombinfo.round, halfinfo, matchpoint ? " \f2[MATCH POINT]" : "");
         draw_text(scoreline, (VIRTW*2 - text_width(scoreline))/2, y, 255, 255, 255);
 
@@ -1871,7 +1887,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
         glLoadIdentity();
         glOrtho(0, VIRTW/2, VIRTH/2, 0, -1, 1);
 
-        if(p->state == CS_ALIVE && !hidehudequipment)
+        if(p->state == CS_ALIVE)
         {
             if(p == player1 && !intermission && can_buy(p))
             {
@@ -1892,7 +1908,7 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             }
             pushfont("huddigits");
             draw_textf("%d", HUDPOS_HEALTH + HUDPOS_NUMBERSPACING, 823, p->health);
-            if(p->armour) draw_textf("%d", HUDPOS_ARMOUR + HUDPOS_NUMBERSPACING, 823, p->armour);
+            draw_textf("%d", HUDPOS_ARMOUR + HUDPOS_NUMBERSPACING, 823, p->armour);
             if(p->weaponsel && valid_weapon(p->weaponsel->type))
             {
                 glMatrixMode(GL_MODELVIEW);
@@ -1918,12 +1934,17 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
             if(!offs || scores[2] || scores[3]) loopi(2) // flag state or frag-counter
             {
                 bool inbase = flaginfos[i].state == CTFF_INBASE || offs;
-                drawctficon(i*120+VIRTW/4.0f*3.0f, 1650, 120, i + (inbase || flagscorehudtransparency == 2 ? 0 : 2), offs / 2, 1/4.0f, inbase || !flagscorehudtransparency ? 255 : 100);
+                int icon_sz = 110;
+                int base_x = VIRTW - 245;
+                int icon_x = base_x + i * (icon_sz + 10);
+                int icon_y = VIRTH - 145;
+                int text_y = icon_y - 45;
+                drawctficon(icon_x, icon_y, icon_sz, i + (inbase || flagscorehudtransparency == 2 ? 0 : 2), offs / 2, 1/4.0f, inbase || !flagscorehudtransparency ? 255 : 100);
                 if(m_teammode)
                 {
                     defformatstring(count)("\f%c%d", cc[i], scores[i + offs]);
                     int countwidth = text_width(count);
-                    draw_text(count, i * 120 + VIRTW / 4.0f * 3.0f + (countwidth > 114 ? (i ? 3 : (120 - countwidth - 3)) : (60 - countwidth / 2)), 1590);
+                    draw_text(count, icon_x + (icon_sz - countwidth) / 2, text_y);
                 }
             }
             if(!offs)
