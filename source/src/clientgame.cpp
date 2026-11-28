@@ -1163,7 +1163,7 @@ void bombinfochanged(int oldstate)
                     hudoutf("\f1The bomb has been planted at Site %c!", bombinfo.site == 0 ? 'A' : 'B');
                 else
                     hudoutf("\f1The bomb has been planted!");
-                audiomgr.playsound(S_FA_BOMBPLANTED, SP_HIGHEST);
+                audiomgr.playsound(S_RADIO_BOMBPLANTED, SP_HIGHEST);
                 audiomgr.playsound(S_C4_PLANT, &bombinfo.pos, SP_HIGH);
             }
             break;
@@ -1180,6 +1180,8 @@ void bombinfochanged(int oldstate)
             if(oldstate == BOMB_END) break;
             int win_team = bombinfo.result == BOMB_RESULT_ATTACKERS ? bombinfo.attackerteam : team_opposite(bombinfo.attackerteam);
             calculate_round_mvp(win_team);
+            if(team_base(win_team) == TEAM_CLA) audiomgr.playsound(S_RADIO_TERWIN, SP_HIGHEST);
+            else audiomgr.playsound(S_RADIO_CTWIN, SP_HIGHEST);
             if(bombinfo.reason == BOMB_REASON_EXPLODED)
             {
                 particle_splash(PART_FIREBALL, 40, 1200, bombinfo.pos);
@@ -1190,7 +1192,7 @@ void bombinfochanged(int oldstate)
             }
             else if(bombinfo.reason == BOMB_REASON_DEFUSED)
             {
-                audiomgr.playsound(S_FA_DEFUSED, SP_HIGHEST);
+                audiomgr.playsound(S_RADIO_BOMBDEFUSED, SP_HIGHEST);
                 hudoutf("\f3The bomb was defused - defenders win the round");
             }
             else if(bombinfo.reason == BOMB_REASON_TIME)

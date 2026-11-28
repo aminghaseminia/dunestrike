@@ -1041,7 +1041,12 @@ void parsemessages(int cn, playerent *d, ucharbuf &p, bool demo = false)
                 else if(alive==player1) hudoutf("you are the survivor!");
                 else hudoutf("%s is the survivor!", colorname(alive));
                 arenaintermission = lastmillis;
-                if(alive) calculate_round_mvp(team_base(alive->team));
+                if(alive)
+                {
+                    calculate_round_mvp(team_base(alive->team));
+                    if(team_base(alive->team) == TEAM_CLA) audiomgr.playsound(S_RADIO_TERWIN, SP_HIGHEST);
+                    else audiomgr.playsound(S_RADIO_CTWIN, SP_HIGHEST);
+                }
                 break;
             }
 

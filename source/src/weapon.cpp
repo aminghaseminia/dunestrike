@@ -1844,6 +1844,7 @@ void grenades::thrownade(const vec &vel)
 
     throwmillis = lastmillis;
     updatelastaction(owner);
+    audiomgr.playsound(S_RADIO_FIREINTHEHOLE, owner, owner == player1 ? SP_HIGH : SP_NORMAL);
     state = GST_THROWING;
     if(this==owner->weaponsel) owner->attacking = false;
     if(quicknade && owner->weaponsel->type == GUN_GRENADE) selectweapon(owner->prevweaponsel);

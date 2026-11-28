@@ -33,6 +33,7 @@ clang++ -O2 -Wall "$DIR/test_phase2_tactical_utilities.cpp" -o "$DIR/test_phase2
 clang++ -O2 -Wall "$DIR/test_phase3_spatial_audio.cpp" -o "$DIR/test_phase3_spatial_audio"
 clang++ -O2 -Wall "$DIR/test_phase4_kevlar_helmet.cpp" -o "$DIR/test_phase4_kevlar_helmet"
 clang++ -O2 -Wall "$DIR/test_radar_crosshair_sniperzoom.cpp" -o "$DIR/test_radar_crosshair_sniperzoom"
+clang++ -O2 -Wall "$DIR/test_cs16_radio_and_dust2_refinements.cpp" -o "$DIR/test_cs16_radio_and_dust2_refinements"
 
 echo "[RUN] Running test_phase1_cs_fixes..."
 "$DIR/test_phase1_cs_fixes"
@@ -118,6 +119,9 @@ echo "[RUN] Running test_cs_tactical_gameplay..."
 
 echo "[RUN] Running test_radar_crosshair_sniperzoom..."
 "$DIR/test_radar_crosshair_sniperzoom"
+
+echo "[RUN] Running test_cs16_radio_and_dust2_refinements..."
+"$DIR/test_cs16_radio_and_dust2_refinements"
 echo ""
 echo "========================================"
 echo "  ALL TESTS PASSED SUCCESSFULLY!"

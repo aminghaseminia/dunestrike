@@ -708,6 +708,11 @@ soundcfgitem soundcfg[S_NULL] =
     { "weapons/c4_disarm",        "C4 Disarm",               0, 0,  0, S_C4_DISARM,              C(OTHER) },
     { "player/footsteps_wood",    "Footsteps (wood)",       40, 1, 20, S_FOOTSTEPS_WOOD,         C(MOVEMENT) },
     { "player/footsteps_metal",   "Footsteps (metal)",      42, 1, 22, S_FOOTSTEPS_METAL,        C(MOVEMENT) },
-    { "player/footsteps_dirt",    "Footsteps (dirt)",       38, 1, 18, S_FOOTSTEPS_DIRT,         C(MOVEMENT) }
+    { "player/footsteps_dirt",    "Footsteps (dirt)",       38, 1, 18, S_FOOTSTEPS_DIRT,         C(MOVEMENT) },
+    { "voicecom/fireinthehole",   "Fire in the hole!",        0, 0,  0, S_RADIO_FIREINTHEHOLE,    C(VOICECOM)|C(OTHER) },
+    { "voicecom/ctwin",           "Counter-Terrorists Win",   0, 0,  0, S_RADIO_CTWIN,            C(VOICECOM)|C(OTHER) },
+    { "voicecom/terwin",          "Terrorists Win",           0, 0,  0, S_RADIO_TERWIN,           C(VOICECOM)|C(OTHER) },
+    { "voicecom/bombplanted",     "Bomb has been planted",    0, 0,  0, S_RADIO_BOMBPLANTED,      C(VOICECOM)|C(OTHER) },
+    { "voicecom/bombdefused",     "Bomb has been defused",    0, 0,  0, S_RADIO_BOMBDEFUSED,      C(VOICECOM)|C(OTHER) }
 };
 #undef C
